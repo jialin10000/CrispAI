@@ -28,14 +28,6 @@ const PANEL_HTML = `
     <button id="btn-open" class="btn-launch">Open CrispAI...</button>
   </div>
 
-  <!-- No-document state (inline, fits in small panel) -->
-  <div id="view-nodoc" class="panel" style="display:none;">
-    <div class="panel-logo">CrispAI</div>
-    <div class="nodoc-msg">No photo open in Photoshop.</div>
-    <button id="btn-pick-file" class="btn-launch">Open a Photo...</button>
-    <button id="btn-nodoc-cancel" class="btn-back">&#8592; Back</button>
-  </div>
-
   <!-- Server not running state -->
   <div id="view-noserver" class="panel" style="display:none;">
     <div class="panel-logo">CrispAI</div>
@@ -106,7 +98,9 @@ function attachStyles(node) {
   const style = document.createElement("style");
   style.textContent = `
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    .panel { padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+    :host, .panel-root { display: flex; flex-direction: column; width: 100%; height: 100%; }
+    .panel { padding: 14px; display: flex; flex-direction: column; gap: 8px;
+      width: 100%; }
     .panel-logo { font-size: 16px; font-weight: 700; color: #fff; letter-spacing: 1px; }
     .panel-status { font-size: 10px; color: #888; }
     .btn-launch { padding: 8px; background: #2d5a8e; border: 1px solid #3a72b0;
@@ -171,20 +165,16 @@ function attachStyles(node) {
 
 // ── Wire up all UI events ──────────────────────────────────────
 function setupUI(node) {
-  const btnOpen        = node.querySelector("#btn-open");
-  const panelStatus    = node.querySelector("#panel-status");
-  const viewMain       = node.querySelector("#view-main");
-  const viewNodoc      = node.querySelector("#view-nodoc");
-  const viewNoserver   = node.querySelector("#view-noserver");
-  const btnPickFile    = node.querySelector("#btn-pick-file");
-  const btnNodocCancel = node.querySelector("#btn-nodoc-cancel");
-  const btnRetry       = node.querySelector("#btn-retry");
+  const btnOpen           = node.querySelector("#btn-open");
+  const panelStatus       = node.querySelector("#panel-status");
+  const viewMain          = node.querySelector("#view-main");
+  const viewNoserver      = node.querySelector("#view-noserver");
+  const btnRetry          = node.querySelector("#btn-retry");
   const btnNoserverCancel = node.querySelector("#btn-noserver-cancel");
   const modal          = node.querySelector("#crispai-modal");
 
   function showView(name) {
     viewMain.style.display     = name === "main"     ? "flex" : "none";
-    viewNodoc.style.display    = name === "nodoc"    ? "flex" : "none";
     viewNoserver.style.display = name === "noserver" ? "flex" : "none";
   }
   const btnPreview    = node.querySelector("#btn-preview");
@@ -206,34 +196,32 @@ function setupUI(node) {
   denoiseSlider.addEventListener("input", () => denoiseVal.textContent = denoiseSlider.value);
   sharpenSlider.addEventListener("input", () => sharpenVal.textContent = sharpenSlider.value);
 
-  // ── Open button ──
+  // ── Open button: if no doc, go straight to file picker ──
   btnOpen.addEventListener("click", async () => {
-    if (!app.activeDocument) { showView("nodoc"); return; }
+    if (!app.activeDocument) {
+      await pickAndOpenFile();
+      return;
+    }
     await openMainModal();
   });
 
-  // ── No-doc: pick a file ──
-  btnPickFile.addEventListener("click", async () => {
+  async function pickAndOpenFile() {
     try {
+      panelStatus.textContent = "Choose a photo...";
       const file = await fs.getFileForOpening({
         allowMultiple: false,
         types: ["jpg", "jpeg", "png", "tif", "tiff", "psd", "psb"],
       });
-      if (!file) return;
-      showView("main");
+      if (!file) { panelStatus.textContent = "Ready"; return; }
       panelStatus.textContent = "Opening...";
       await core.executeAsModal(async () => {
         await app.open(file);
       }, { commandName: "CrispAI: Open Photo" });
       await openMainModal();
     } catch (e) {
-      panelStatus.textContent = "Ready";
-      showView("nodoc");
-      node.querySelector(".nodoc-msg").textContent =
-        "Could not open file: " + (e.message || e);
+      panelStatus.textContent = "Error: " + (e.message || e);
     }
-  });
-  btnNodocCancel.addEventListener("click", () => showView("main"));
+  }
 
   // ── No-server: retry ──
   btnRetry.addEventListener("click", () => openMainModal());

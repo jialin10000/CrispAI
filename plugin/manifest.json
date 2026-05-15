@@ -14,8 +14,7 @@
       "type": "panel",
       "id": "crispai-panel",
       "label": { "default": "CrispAI" },
-      "minimumSize": { "width": 200, "height": 200 },
-      "defaultSize": { "width": 240, "height": 220 }
+      "minimumSize": { "width": 180, "height": 120 }
     }
   ],
   "requiredPermissions": {
