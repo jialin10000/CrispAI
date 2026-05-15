@@ -1,0 +1,25 @@
+{
+  "id": "com.crispai.plugin",
+  "name": "CrispAI",
+  "version": "0.1.0",
+  "manifestVersion": 5,
+  "host": {
+    "app": "PS",
+    "minVersion": "23.0.0"
+  },
+  "entrypoints": [
+    {
+      "type": "panel",
+      "id": "crispai-panel",
+      "label": { "default": "CrispAI" },
+      "minimumSize": { "width": 220, "height": 360 },
+      "defaultSize": { "width": 260, "height": 420 }
+    }
+  ],
+  "requiredPermissions": {
+    "network": {
+      "domains": ["localhost"]
+    },
+    "localFileSystem": "request"
+  }
+}

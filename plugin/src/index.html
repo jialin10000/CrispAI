@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CrispAI</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="container">
+    <div class="logo">CrispAI</div>
+    <div class="subtitle">AI Noise Reduction & Sharpening</div>
+
+    <!-- Status -->
+    <div id="status" class="status idle">Ready</div>
+
+    <!-- Denoise section -->
+    <div class="section">
+      <div class="section-title">Noise Reduction</div>
+      <div class="slider-row">
+        <label>Strength</label>
+        <input type="range" id="denoise-strength" min="0" max="100" value="50" />
+        <span id="denoise-val">50</span>
+      </div>
+    </div>
+
+    <!-- Sharpen section -->
+    <div class="section">
+      <div class="section-title">Sharpening</div>
+      <div class="slider-row">
+        <label>Strength</label>
+        <input type="range" id="sharpen-strength" min="0" max="100" value="50" />
+        <span id="sharpen-val">50</span>
+      </div>
+      <div class="mode-row">
+        <label>Mode</label>
+        <select id="sharpen-mode">
+          <option value="auto">Auto</option>
+          <option value="motion_blur">Motion Blur (Shake)</option>
+          <option value="focus_blur">Focus Blur (Soft)</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Buttons -->
+    <div class="buttons">
+      <button id="btn-denoise" class="btn">Denoise Only</button>
+      <button id="btn-sharpen" class="btn">Sharpen Only</button>
+      <button id="btn-enhance" class="btn btn-primary">Enhance (Both)</button>
+    </div>
+
+    <div class="footer">Result added as new layer</div>
+  </div>
+
+  <script src="main.js" type="module"></script>
+</body>
+</html>

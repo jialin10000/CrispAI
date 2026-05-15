@@ -1,0 +1,132 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: #1e1e1e;
+  color: #d4d4d4;
+  font-family: -apple-system, "Adobe Clean", sans-serif;
+  font-size: 12px;
+}
+
+.container {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.logo {
+  font-size: 18px;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: 1px;
+}
+
+.subtitle {
+  font-size: 10px;
+  color: #888;
+  margin-top: -8px;
+}
+
+.status {
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  text-align: center;
+}
+.status.idle     { background: #2a2a2a; color: #888; }
+.status.working  { background: #1a3a5c; color: #5aabff; }
+.status.done     { background: #1a3a2a; color: #4caf7d; }
+.status.error    { background: #3a1a1a; color: #ff6b6b; }
+
+.section {
+  background: #2a2a2a;
+  border-radius: 6px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.section-title {
+  font-weight: 600;
+  color: #aaa;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.slider-row, .mode-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.slider-row label, .mode-row label {
+  width: 54px;
+  color: #999;
+  flex-shrink: 0;
+}
+
+input[type="range"] {
+  flex: 1;
+  accent-color: #5aabff;
+  height: 4px;
+}
+
+.slider-row span {
+  width: 24px;
+  text-align: right;
+  color: #ccc;
+}
+
+select {
+  flex: 1;
+  background: #333;
+  border: 1px solid #444;
+  color: #ccc;
+  padding: 3px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+}
+
+.buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.btn {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #444;
+  border-radius: 4px;
+  background: #333;
+  color: #ccc;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background 0.15s;
+}
+.btn:hover { background: #3d3d3d; }
+
+.btn-primary {
+  background: #2d5a8e;
+  border-color: #3a72b0;
+  color: #fff;
+  font-weight: 600;
+}
+.btn-primary:hover { background: #3468a3; }
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.footer {
+  font-size: 10px;
+  color: #555;
+  text-align: center;
+}
