@@ -2,7 +2,7 @@ const { app, imaging, core } = require("photoshop");
 const { entrypoints, storage, shell } = require("uxp");
 const fs = storage.localFileSystem;
 
-const SERVER = "http://127.0.0.1:7788";
+const SERVER = "http://192.168.1.168:7788"; // Mac Mini
 const PREVIEW_SIZE = 1024;
 
 entrypoints.setup({
