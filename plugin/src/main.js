@@ -1,4 +1,4 @@
-import { app, imaging, core } from "photoshop";
+const { app, imaging, core } = require("photoshop");
 
 const SERVER = "http://127.0.0.1:7788";
 const PREVIEW_SIZE = 1024; // downscale for fast preview
