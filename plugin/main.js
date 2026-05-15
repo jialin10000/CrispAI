@@ -1,5 +1,5 @@
 const { app, imaging, core } = require("photoshop");
-const { entrypoints, storage } = require("uxp");
+const { entrypoints, storage, shell } = require("uxp");
 const fs = storage.localFileSystem;
 
 const SERVER = "http://127.0.0.1:7788";
@@ -291,13 +291,27 @@ function setupUI(node) {
     showView("main");
     try {
       await checkServer();
-      modal.style.display = "flex";
-      await loadPreview(app.activeDocument);
-      panelStatus.textContent = "Ready";
     } catch (e) {
-      panelStatus.textContent = "Ready";
-      showView("noserver");
+      // Server not running — try to auto-start it
+      panelStatus.textContent = "Starting server...";
+      try {
+        const pluginFolder = await fs.getPluginFolder();
+        const batFile = await pluginFolder.getEntry("start-server.bat");
+        await shell.openPath(batFile.nativePath);
+        // Wait up to 8 seconds for server to come up
+        let started = false;
+        for (let i = 0; i < 8; i++) {
+          await new Promise(r => setTimeout(r, 1000));
+          try { await checkServer(); started = true; break; } catch (_) {}
+        }
+        if (!started) { showView("noserver"); panelStatus.textContent = "Ready"; return; }
+      } catch (e2) {
+        showView("noserver"); panelStatus.textContent = "Ready"; return;
+      }
     }
+    modal.style.display = "flex";
+    await loadPreview(app.activeDocument);
+    panelStatus.textContent = "Ready";
   }
 
   async function loadPreview(doc) {
