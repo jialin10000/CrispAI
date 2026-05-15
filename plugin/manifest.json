@@ -2,10 +2,10 @@
   "id": "com.crispai.plugin",
   "name": "CrispAI",
   "version": "0.2.0",
-  "manifestVersion": 5,
+  "manifestVersion": 4,
   "host": {
     "app": "PS",
-    "minVersion": "23.0.0"
+    "minVersion": "22.0.0"
   },
   "entrypoints": [
     {
