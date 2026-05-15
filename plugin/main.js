@@ -21,20 +21,28 @@ entrypoints.setup({
 
 // ── HTML template ──────────────────────────────────────────────
 const PANEL_HTML = `
-  <div class="panel">
+  <!-- Default state -->
+  <div id="view-main" class="panel">
     <div class="panel-logo">CrispAI</div>
     <div id="panel-status" class="panel-status">Ready</div>
     <button id="btn-open" class="btn-launch">Open CrispAI...</button>
   </div>
 
-  <!-- No-document overlay -->
-  <div id="no-doc-modal" class="modal" style="display:none;">
-    <div class="nodoc-box">
-      <div class="nodoc-title">No Photo Open</div>
-      <div class="nodoc-msg">Open a photo in Photoshop first, or choose a file below.</div>
-      <button id="btn-pick-file" class="btn btn-apply" style="width:100%;">Open Photo...</button>
-      <button id="btn-nodoc-cancel" class="btn btn-cancel" style="width:100%; margin-top:6px;">Cancel</button>
-    </div>
+  <!-- No-document state (inline, fits in small panel) -->
+  <div id="view-nodoc" class="panel" style="display:none;">
+    <div class="panel-logo">CrispAI</div>
+    <div class="nodoc-msg">No photo open in Photoshop.</div>
+    <button id="btn-pick-file" class="btn-launch">Open a Photo...</button>
+    <button id="btn-nodoc-cancel" class="btn-back">&#8592; Back</button>
+  </div>
+
+  <!-- Server not running state -->
+  <div id="view-noserver" class="panel" style="display:none;">
+    <div class="panel-logo">CrispAI</div>
+    <div class="nodoc-msg">Backend server is not running.</div>
+    <div class="server-cmd">cd backend<br/>python server.py</div>
+    <button id="btn-retry" class="btn-launch">Retry</button>
+    <button id="btn-noserver-cancel" class="btn-back">&#8592; Back</button>
   </div>
 
   <!-- Main compare modal -->
@@ -108,11 +116,11 @@ function attachStyles(node) {
     .modal { position: fixed; inset: 0; z-index: 999; }
     .dialog-layout { display: flex; width: 100%; height: 100%; background: #1a1a1a; }
 
-    .nodoc-box { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
-      background: #2a2a2a; border: 1px solid #444; border-radius: 8px;
-      padding: 24px; width: 240px; display: flex; flex-direction: column; gap: 12px; }
-    .nodoc-title { font-size: 15px; font-weight: 700; color: #fff; }
     .nodoc-msg { font-size: 11px; color: #999; line-height: 1.5; }
+    .server-cmd { font-size: 10px; color: #5aabff; background: #1a1a1a;
+      border-radius: 3px; padding: 6px 8px; font-family: monospace; line-height: 1.6; }
+    .btn-back { background: none; border: none; color: #666; font-size: 11px;
+      cursor: pointer; text-align: left; padding: 2px 0; }
 
     .compare-wrap { flex: 1; background: #111; display: flex; align-items: center;
       justify-content: center; position: relative; overflow: hidden; }
@@ -163,12 +171,22 @@ function attachStyles(node) {
 
 // ── Wire up all UI events ──────────────────────────────────────
 function setupUI(node) {
-  const btnOpen       = node.querySelector("#btn-open");
-  const panelStatus   = node.querySelector("#panel-status");
-  const noDocModal    = node.querySelector("#no-doc-modal");
-  const btnPickFile   = node.querySelector("#btn-pick-file");
-  const btnNodocCancel= node.querySelector("#btn-nodoc-cancel");
-  const modal         = node.querySelector("#crispai-modal");
+  const btnOpen        = node.querySelector("#btn-open");
+  const panelStatus    = node.querySelector("#panel-status");
+  const viewMain       = node.querySelector("#view-main");
+  const viewNodoc      = node.querySelector("#view-nodoc");
+  const viewNoserver   = node.querySelector("#view-noserver");
+  const btnPickFile    = node.querySelector("#btn-pick-file");
+  const btnNodocCancel = node.querySelector("#btn-nodoc-cancel");
+  const btnRetry       = node.querySelector("#btn-retry");
+  const btnNoserverCancel = node.querySelector("#btn-noserver-cancel");
+  const modal          = node.querySelector("#crispai-modal");
+
+  function showView(name) {
+    viewMain.style.display     = name === "main"     ? "flex" : "none";
+    viewNodoc.style.display    = name === "nodoc"    ? "flex" : "none";
+    viewNoserver.style.display = name === "noserver" ? "flex" : "none";
+  }
   const btnPreview    = node.querySelector("#btn-preview");
   const btnApply      = node.querySelector("#btn-apply");
   const btnCancel     = node.querySelector("#btn-cancel");
@@ -190,14 +208,11 @@ function setupUI(node) {
 
   // ── Open button ──
   btnOpen.addEventListener("click", async () => {
-    if (!app.activeDocument) {
-      noDocModal.style.display = "block";
-      return;
-    }
+    if (!app.activeDocument) { showView("nodoc"); return; }
     await openMainModal();
   });
 
-  // ── No-doc modal: pick a file ──
+  // ── No-doc: pick a file ──
   btnPickFile.addEventListener("click", async () => {
     try {
       const file = await fs.getFileForOpening({
@@ -206,17 +221,19 @@ function setupUI(node) {
       });
       if (!file) return;
       panelStatus.textContent = "Opening...";
-      noDocModal.style.display = "none";
+      showView("main");
       await app.open(file);
       await openMainModal();
     } catch (e) {
       panelStatus.textContent = "Could not open file";
+      showView("main");
     }
   });
+  btnNodocCancel.addEventListener("click", () => showView("main"));
 
-  btnNodocCancel.addEventListener("click", () => {
-    noDocModal.style.display = "none";
-  });
+  // ── No-server: retry ──
+  btnRetry.addEventListener("click", () => openMainModal());
+  btnNoserverCancel.addEventListener("click", () => showView("main"));
 
   // ── Main modal ──
   btnCancel.addEventListener("click", () => { modal.style.display = "none"; });
@@ -279,14 +296,15 @@ function setupUI(node) {
 
   async function openMainModal() {
     panelStatus.textContent = "Loading...";
+    showView("main");
     try {
       await checkServer();
       modal.style.display = "flex";
       await loadPreview(app.activeDocument);
       panelStatus.textContent = "Ready";
     } catch (e) {
-      panelStatus.textContent = "Server not running";
-      modal.style.display = "none";
+      panelStatus.textContent = "Ready";
+      showView("noserver");
     }
   }
 
