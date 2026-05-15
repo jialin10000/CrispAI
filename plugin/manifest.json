@@ -3,6 +3,7 @@
   "name": "CrispAI",
   "version": "0.2.0",
   "manifestVersion": 4,
+  "apiVersion": 2,
   "host": {
     "app": "PS",
     "minVersion": "22.0.0"
