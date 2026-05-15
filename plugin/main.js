@@ -220,13 +220,17 @@ function setupUI(node) {
         types: ["jpg", "jpeg", "png", "tif", "tiff", "psd", "psb"],
       });
       if (!file) return;
-      panelStatus.textContent = "Opening...";
       showView("main");
-      await app.open(file);
+      panelStatus.textContent = "Opening...";
+      await core.executeAsModal(async () => {
+        await app.open(file);
+      }, { commandName: "CrispAI: Open Photo" });
       await openMainModal();
     } catch (e) {
-      panelStatus.textContent = "Could not open file";
-      showView("main");
+      panelStatus.textContent = "Ready";
+      showView("nodoc");
+      node.querySelector(".nodoc-msg").textContent =
+        "Could not open file: " + (e.message || e);
     }
   });
   btnNodocCancel.addEventListener("click", () => showView("main"));
