@@ -1,0 +1,262 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: #1e1e1e;
+  color: #d4d4d4;
+  font-family: -apple-system, "Adobe Clean", sans-serif;
+  font-size: 12px;
+  overflow: hidden;
+}
+
+/* ── Small panel ── */
+.panel {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.panel-logo { font-size: 16px; font-weight: 700; color: #fff; letter-spacing: 1px; }
+.panel-status { font-size: 10px; color: #888; }
+.btn-launch {
+  padding: 8px;
+  background: #2d5a8e;
+  border: 1px solid #3a72b0;
+  border-radius: 4px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn-launch:hover { background: #3468a3; }
+
+/* ── Dialog ── */
+dialog {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  max-width: 100vw;
+  max-height: 100vh;
+  background: #1a1a1a;
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+dialog::backdrop { background: rgba(0,0,0,0.7); }
+
+.dialog-layout {
+  display: flex;
+  width: 100%;
+  height: 100%;
+}
+
+/* ── Compare area ── */
+.compare-wrap {
+  flex: 1;
+  background: #111;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.compare-container {
+  position: relative;
+  display: none; /* shown after images load */
+  cursor: ew-resize;
+  user-select: none;
+}
+
+.compare-container.ready { display: block; }
+
+.img-layer {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.img-original {
+  position: relative;
+  z-index: 1;
+}
+
+.processed-clip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 50%;
+  height: 100%;
+  overflow: hidden;
+  z-index: 2;
+}
+
+.img-processed {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.divider {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 3px;
+  height: 100%;
+  background: #fff;
+  z-index: 10;
+  cursor: ew-resize;
+}
+
+.divider-handle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: #fff;
+  color: #333;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+}
+
+.label {
+  position: absolute;
+  top: 12px;
+  background: rgba(0,0,0,0.55);
+  color: #fff;
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 3px;
+  z-index: 5;
+  pointer-events: none;
+}
+.label-left  { left: 12px; }
+.label-right { right: 12px; }
+
+.compare-placeholder {
+  color: #555;
+  font-size: 13px;
+}
+
+/* ── Controls panel ── */
+.controls {
+  width: 220px;
+  flex-shrink: 0;
+  background: #252525;
+  padding: 20px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+}
+
+.ctrl-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 1px;
+}
+
+.ctrl-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ctrl-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  color: #888;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+
+.ctrl-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+input[type="range"] {
+  flex: 1;
+  accent-color: #5aabff;
+}
+
+.ctrl-row span {
+  width: 24px;
+  text-align: right;
+  color: #ccc;
+  font-size: 11px;
+}
+
+select {
+  width: 100%;
+  background: #333;
+  border: 1px solid #444;
+  color: #ccc;
+  padding: 4px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+}
+
+.ctrl-status {
+  font-size: 11px;
+  color: #888;
+  min-height: 16px;
+  text-align: center;
+}
+.ctrl-status.working { color: #5aabff; }
+.ctrl-status.done    { color: #4caf7d; }
+.ctrl-status.error   { color: #ff6b6b; }
+
+.ctrl-buttons {
+  display: flex;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.btn {
+  flex: 1;
+  padding: 9px 4px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.btn-secondary {
+  background: #333;
+  border-color: #444;
+  color: #ccc;
+}
+.btn-secondary:hover { background: #3d3d3d; }
+
+.btn-cancel {
+  background: #333;
+  border-color: #555;
+  color: #aaa;
+}
+.btn-cancel:hover { background: #3d3d3d; }
+
+.btn-apply {
+  background: #2d5a8e;
+  border-color: #3a72b0;
+  color: #fff;
+}
+.btn-apply:hover { background: #3468a3; }
+
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.ctrl-note {
+  font-size: 10px;
+  color: #555;
+  text-align: center;
+}

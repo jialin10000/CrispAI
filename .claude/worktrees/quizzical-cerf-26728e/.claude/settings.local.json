@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add *)",
+      "Bash(git commit -m 'Fix: add root-level main.js bootstrap + upgrade to manifestVersion 5 *)",
+      "Bash(git -c user.email=jiali@crispai.dev -c user.name=jiali commit -m 'Fix: add root-level main.js bootstrap + upgrade to manifestVersion 5 *)"
+    ]
+  }
+}

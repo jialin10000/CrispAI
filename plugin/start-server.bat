@@ -1,5 +1,5 @@
 @echo off
 cd /d "%~dp0..\backend"
 echo Starting CrispAI backend server...
-python server.py
+py -3.11 server.py
 pause
