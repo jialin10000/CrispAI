@@ -2,55 +2,78 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>CrispAI</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div class="container">
-    <div class="logo">CrispAI</div>
-    <div class="subtitle">AI Noise Reduction & Sharpening</div>
 
-    <!-- Status -->
-    <div id="status" class="status idle">Ready</div>
-
-    <!-- Denoise section -->
-    <div class="section">
-      <div class="section-title">Noise Reduction</div>
-      <div class="slider-row">
-        <label>Strength</label>
-        <input type="range" id="denoise-strength" min="0" max="100" value="50" />
-        <span id="denoise-val">50</span>
-      </div>
-    </div>
-
-    <!-- Sharpen section -->
-    <div class="section">
-      <div class="section-title">Sharpening</div>
-      <div class="slider-row">
-        <label>Strength</label>
-        <input type="range" id="sharpen-strength" min="0" max="100" value="50" />
-        <span id="sharpen-val">50</span>
-      </div>
-      <div class="mode-row">
-        <label>Mode</label>
-        <select id="sharpen-mode">
-          <option value="auto">Auto</option>
-          <option value="motion_blur">Motion Blur (Shake)</option>
-          <option value="focus_blur">Focus Blur (Soft)</option>
-        </select>
-      </div>
-    </div>
-
-    <!-- Buttons -->
-    <div class="buttons">
-      <button id="btn-denoise" class="btn">Denoise Only</button>
-      <button id="btn-sharpen" class="btn">Sharpen Only</button>
-      <button id="btn-enhance" class="btn btn-primary">Enhance (Both)</button>
-    </div>
-
-    <div class="footer">Result added as new layer</div>
+  <!-- Small panel — just a launch button -->
+  <div class="panel">
+    <div class="panel-logo">CrispAI</div>
+    <div id="panel-status" class="panel-status">Ready</div>
+    <button id="btn-open" class="btn-launch">Open CrispAI...</button>
   </div>
+
+  <!-- Full-screen modal dialog -->
+  <dialog id="crispai-dialog">
+    <div class="dialog-layout">
+
+      <!-- Left: image comparison -->
+      <div class="compare-wrap">
+        <div class="compare-container" id="compare-container">
+          <img id="img-original" class="img-layer img-original" />
+          <div class="processed-clip" id="processed-clip">
+            <img id="img-processed" class="img-layer img-processed" />
+          </div>
+          <div class="divider" id="divider">
+            <div class="divider-handle">◀▶</div>
+          </div>
+          <div class="label label-left">Original</div>
+          <div class="label label-right">CrispAI</div>
+        </div>
+        <div id="compare-placeholder" class="compare-placeholder">
+          Loading preview...
+        </div>
+      </div>
+
+      <!-- Right: controls -->
+      <div class="controls">
+        <div class="ctrl-title">CrispAI</div>
+
+        <div class="ctrl-section">
+          <div class="ctrl-label">Noise Reduction</div>
+          <div class="ctrl-row">
+            <input type="range" id="denoise-strength" min="0" max="100" value="50" />
+            <span id="denoise-val">50</span>
+          </div>
+        </div>
+
+        <div class="ctrl-section">
+          <div class="ctrl-label">Sharpening</div>
+          <div class="ctrl-row">
+            <input type="range" id="sharpen-strength" min="0" max="100" value="50" />
+            <span id="sharpen-val">50</span>
+          </div>
+          <select id="sharpen-mode">
+            <option value="auto">Auto</option>
+            <option value="motion_blur">Motion Blur (Shake)</option>
+            <option value="focus_blur">Focus Blur (Soft)</option>
+          </select>
+        </div>
+
+        <button id="btn-preview" class="btn btn-secondary">Update Preview</button>
+
+        <div id="ctrl-status" class="ctrl-status">Ready</div>
+
+        <div class="ctrl-buttons">
+          <button id="btn-cancel" class="btn btn-cancel">Cancel</button>
+          <button id="btn-apply" class="btn btn-apply">Apply to PS</button>
+        </div>
+
+        <div class="ctrl-note">Result added as new layer</div>
+      </div>
+    </div>
+  </dialog>
 
   <script src="main.js" type="module"></script>
 </body>

@@ -1,7 +1,7 @@
 {
   "id": "com.crispai.plugin",
   "name": "CrispAI",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "manifestVersion": 5,
   "host": {
     "app": "PS",
@@ -12,14 +12,12 @@
       "type": "panel",
       "id": "crispai-panel",
       "label": { "default": "CrispAI" },
-      "minimumSize": { "width": 220, "height": 360 },
-      "defaultSize": { "width": 260, "height": 420 }
+      "minimumSize": { "width": 200, "height": 120 },
+      "defaultSize": { "width": 240, "height": 140 }
     }
   ],
   "requiredPermissions": {
-    "network": {
-      "domains": ["localhost"]
-    },
+    "network": { "domains": ["localhost"] },
     "localFileSystem": "request"
   }
 }
