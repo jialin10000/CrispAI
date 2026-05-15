@@ -18,7 +18,7 @@
     }
   ],
   "requiredPermissions": {
-    "network": { "domains": ["localhost", "192.168.1.121"] },
+    "network": { "domains": ["localhost"] },
     "localFileSystem": "request"
   }
 }
