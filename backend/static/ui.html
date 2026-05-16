@@ -664,8 +664,28 @@
       debounceTimer = setTimeout(doPreview, 350);
     }
 
+    function isPipelineActive(params) {
+      // Returns true only if at least one stage is enabled AND its strength
+      // is above the dead-zone. When false, we skip the preview entirely so
+      // the user sees the full-resolution original on both sides instead of
+      // a needlessly downsampled 'no-op' preview.
+      const d = params.denoise, s = params.sharpen;
+      const denoiseActive = d && d.enabled && d.strength > 0.01;
+      const sharpenActive = s && s.enabled && s.strength > 0.01;
+      return denoiseActive || sharpenActive;
+    }
+
     async function doPreview() {
       if (!sid) return;
+      const params = getParams();
+      // Nothing to do -> show the original on both sides (no resolution mismatch).
+      if (!isPipelineActive(params)) {
+        if (elProcessed.src !== elOriginal.src) elProcessed.src = elOriginal.src;
+        elBtnSave.disabled = true;
+        elBtnFullPreview.disabled = true;
+        setStatus('No processing — toggle a section or raise strength', 'done');
+        return;
+      }
       if (previewInflight) { debounceTimer = setTimeout(doPreview, 200); return; }
       previewInflight = true;
       setStatus('Updating preview…', 'working');
@@ -673,7 +693,7 @@
         const r = await fetch(`${API}/session/${sid}/preview`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(getParams()),
+          body: JSON.stringify(params),
         });
         if (!r.ok) { const e = await r.json(); throw new Error(e.error || r.status); }
         const data = await r.json();
