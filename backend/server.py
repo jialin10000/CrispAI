@@ -4,12 +4,15 @@ Photoshop plugin creates a session, web UI handles preview/apply.
 """
 
 import io
+import os
 import uuid
 import base64
 import logging
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from PIL import Image
+
+STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 
 from models.denoise import DenoiseModel
 from models.sharpen import SharpenModel
@@ -72,7 +75,7 @@ def process_image(image: Image.Image, denoise_strength: float,
 
 @app.route("/ui")
 def ui():
-    return send_from_directory("static", "ui.html")
+    return send_from_directory(STATIC_DIR, "ui.html")
 
 
 # ── Health ─────────────────────────────────────────────────────────────────────
