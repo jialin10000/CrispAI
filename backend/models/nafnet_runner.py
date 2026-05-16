@@ -123,7 +123,10 @@ class NAFNetRunner:
     @torch.no_grad()
     def run(self, image: Image.Image) -> Image.Image:
         """Run inference on a full-resolution PIL image. Uses sliding tiles
-        with cosine-weighted blending so seams are imperceptible."""
+        with cosine-weighted blending across tile boundaries — but the
+        image's OUTER edges keep window=1 so they don't get divided by a
+        near-zero weight (which would amplify AI residual noise into the
+        rainbow checkerboard artefact we saw on real photos)."""
         arr = np.asarray(image.convert("RGB"), dtype=np.float32) / 255.0
         H, W, _ = arr.shape
 
@@ -134,44 +137,61 @@ class NAFNetRunner:
             out = out.clamp(0, 1).squeeze(0).permute(1, 2, 0).cpu().numpy()
             return Image.fromarray((out * 255).round().astype(np.uint8))
 
-        # Tiled with overlap & cosine blend
         tile = self.tile
         ov = self.overlap
         stride = tile - ov
-        # Pad image so tiles cover everything
-        pad_h = (math.ceil((H - ov) / stride) * stride + ov) - H
-        pad_w = (math.ceil((W - ov) / stride) * stride + ov) - W
-        pad_h = max(0, pad_h)
-        pad_w = max(0, pad_w)
+
+        # Pad up to a multiple that the tile grid covers
+        pad_h = max(0, (math.ceil(max(0, H - ov) / stride) * stride + ov) - H)
+        pad_w = max(0, (math.ceil(max(0, W - ov) / stride) * stride + ov) - W)
         if pad_h or pad_w:
             arr = np.pad(arr, ((0, pad_h), (0, pad_w), (0, 0)), mode="reflect")
         Hp, Wp, _ = arr.shape
 
-        # Cosine window for blending
-        def _half_cosine(n: int) -> np.ndarray:
-            t = np.linspace(0, math.pi, n)
-            return 0.5 - 0.5 * np.cos(t)
+        ramp = (0.5 - 0.5 * np.cos(np.linspace(0, math.pi, ov))).astype(np.float32)
 
-        window = np.ones((tile, tile), dtype=np.float32)
-        ramp = _half_cosine(ov)
-        window[:ov, :]  *= ramp[:, None]
-        window[-ov:, :] *= ramp[::-1][:, None]
-        window[:, :ov]  *= ramp[None, :]
-        window[:, -ov:] *= ramp[None, ::-1]
-        window3 = window[..., None]
+        def tile_window(top_ramp: bool, bottom_ramp: bool,
+                        left_ramp: bool, right_ramp: bool) -> np.ndarray:
+            """Window that is 1 in the centre and ramps to 0 only on the
+            edges that overlap a neighbour tile. Outer-image edges stay 1."""
+            w = np.ones((tile, tile), dtype=np.float32)
+            if top_ramp:
+                w[:ov, :]  *= ramp[:, None]
+            if bottom_ramp:
+                w[-ov:, :] *= ramp[::-1][:, None]
+            if left_ramp:
+                w[:, :ov]  *= ramp[None, :]
+            if right_ramp:
+                w[:, -ov:] *= ramp[None, ::-1]
+            return w
 
-        out_acc  = np.zeros_like(arr)
+        y_positions = list(range(0, Hp - tile + 1, stride))
+        x_positions = list(range(0, Wp - tile + 1, stride))
+        # Ensure final tile reaches the bottom/right edge exactly
+        if y_positions[-1] + tile < Hp:
+            y_positions.append(Hp - tile)
+        if x_positions[-1] + tile < Wp:
+            x_positions.append(Wp - tile)
+
+        out_acc    = np.zeros_like(arr)
         weight_acc = np.zeros_like(arr)
 
-        for y in range(0, Hp - tile + 1, stride):
-            for x in range(0, Wp - tile + 1, stride):
+        for i, y in enumerate(y_positions):
+            for j, x in enumerate(x_positions):
+                top_r    = i != 0
+                bottom_r = i != len(y_positions) - 1
+                left_r   = j != 0
+                right_r  = j != len(x_positions) - 1
+                win = tile_window(top_r, bottom_r, left_r, right_r)[..., None]
+
                 patch = arr[y:y + tile, x:x + tile, :]
                 inp = torch.from_numpy(patch).permute(2, 0, 1).unsqueeze(0).to(self.device)
                 out = self._infer_tile(inp).clamp(0, 1).squeeze(0).permute(1, 2, 0).cpu().numpy()
-                out_acc   [y:y + tile, x:x + tile, :] += out * window3
-                weight_acc[y:y + tile, x:x + tile, :] += window3
+                out_acc   [y:y + tile, x:x + tile, :] += out * win
+                weight_acc[y:y + tile, x:x + tile, :] += win
 
-        result = out_acc / np.maximum(weight_acc, 1e-6)
+        # weight_acc is now strictly >= 1 across the whole image — safe to divide.
+        result = out_acc / np.maximum(weight_acc, 1e-3)
         result = result[:H, :W, :]
         result = np.clip(result, 0, 1)
         return Image.fromarray((result * 255).round().astype(np.uint8))
