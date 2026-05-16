@@ -677,10 +677,18 @@
       requestPreview();
     });
 
-    // ── Divider drag ────────────────────────────────────────────
-    // Pointer events fired on the whole compare-wrap (not just the 2px line),
-    // so the user can grab anywhere inside the photo to slide the divider.
+    // ── Divider drag + double-click zoom ─────────────────────────
+    // We use pointer events for drag, then detect double-click ourselves
+    // via pointerup timing. Calling e.preventDefault() on pointerdown
+    // suppresses the synthesized dblclick event, so a native dblclick
+    // listener would never fire — manual detection is the fix.
+
     let dragging = false;
+    let lastTapTime = 0;
+    let lastTapX = 0, lastTapY = 0;
+    let pointerDownAt = 0;
+    let pointerDownX = 0, pointerDownY = 0;
+
     function moveDivider(clientX) {
       const rect = elWrap.getBoundingClientRect();
       if (rect.width === 0) return;
@@ -688,31 +696,73 @@
       elClip.style.width   = pct + '%';
       elDivider.style.left = pct + '%';
     }
-    elWrap.addEventListener('pointerdown', e => {
-      dragging = true;
-      try { elWrap.setPointerCapture(e.pointerId); } catch (_) {}
-      moveDivider(e.clientX);
-      e.preventDefault();
-    });
-    elWrap.addEventListener('pointermove', e => { if (dragging) moveDivider(e.clientX); });
-    elWrap.addEventListener('pointerup',   e => { dragging = false; });
-    elWrap.addEventListener('pointercancel', () => { dragging = false; });
 
-    // Double-click toggles between Fit-to-window and 100% zoom (Topaz convention)
-    elWrap.addEventListener('dblclick', e => {
-      e.preventDefault();
+    function toggleZoom(clientX, clientY) {
       if (Math.abs(currentScale - 1.0) < 0.005) {
         fitToWindow();
       } else {
         applyScale(1.0);
-        // Center the click point in the viewport when zooming to 100%
+        // Re-center scroll so the clicked point ends up near viewport center
         requestAnimationFrame(() => {
           const r = elWrap.getBoundingClientRect();
-          elArea.scrollLeft += (e.clientX - r.left) - elArea.clientWidth / 2;
-          elArea.scrollTop  += (e.clientY - r.top)  - elArea.clientHeight / 2;
+          elArea.scrollLeft += (clientX - r.left) - elArea.clientWidth / 2;
+          elArea.scrollTop  += (clientY - r.top)  - elArea.clientHeight / 2;
         });
       }
+    }
+
+    elWrap.addEventListener('pointerdown', e => {
+      dragging = true;
+      try { elWrap.setPointerCapture(e.pointerId); } catch (_) {}
+      pointerDownAt = Date.now();
+      pointerDownX = e.clientX;
+      pointerDownY = e.clientY;
+      moveDivider(e.clientX);
+      e.preventDefault();
     });
+
+    elWrap.addEventListener('pointermove', e => { if (dragging) moveDivider(e.clientX); });
+
+    elWrap.addEventListener('pointerup', e => {
+      dragging = false;
+      const now = Date.now();
+      const movedFar  = Math.abs(e.clientX - pointerDownX) > 6 || Math.abs(e.clientY - pointerDownY) > 6;
+      const heldLong  = now - pointerDownAt > 300;
+      if (movedFar || heldLong) { lastTapTime = 0; return; }    // was a drag, not a tap
+
+      const dx = Math.abs(e.clientX - lastTapX);
+      const dy = Math.abs(e.clientY - lastTapY);
+      if (now - lastTapTime < 400 && dx < 12 && dy < 12) {
+        toggleZoom(e.clientX, e.clientY);                       // double-tap: zoom
+        lastTapTime = 0;
+      } else {
+        lastTapTime = now;
+        lastTapX = e.clientX;
+        lastTapY = e.clientY;
+      }
+    });
+
+    elWrap.addEventListener('pointercancel', () => { dragging = false; });
+
+    // Mouse-wheel zoom (Topaz convention: Ctrl+wheel, or plain wheel inside area)
+    elArea.addEventListener('wheel', e => {
+      if (!imgW) return;
+      e.preventDefault();
+      const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+      const newScale = Math.max(0.05, Math.min(currentScale * factor, 4));
+      const r = elWrap.getBoundingClientRect();
+      const px = e.clientX - r.left;
+      const py = e.clientY - r.top;
+      applyScale(newScale);
+      // Keep the cursor point stable
+      requestAnimationFrame(() => {
+        const r2 = elWrap.getBoundingClientRect();
+        const dx = (px * newScale / currentScale) - (e.clientX - r2.left);
+        const dy = (py * newScale / currentScale) - (e.clientY - r2.top);
+        elArea.scrollLeft += dx;
+        elArea.scrollTop  += dy;
+      });
+    }, { passive: false });
 
     // ── Save As ─────────────────────────────────────────────────
     elBtnSave.addEventListener('click', async () => {
