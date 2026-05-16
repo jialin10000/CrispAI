@@ -343,8 +343,7 @@
             <select id="denoise-model">
               <option value="normal">Normal</option>
               <option value="strong">Strong</option>
-              <option value="severe">Severe (very noisy)</option>
-              <option value="impulse">Impulse (salt &amp; pepper)</option>
+              <option value="extreme">Extreme</option>
             </select>
             <div class="ctrl-group" style="margin-top:14px;">
               <div class="ctrl-header">
@@ -356,39 +355,7 @@
           </div>
         </div>
 
-        <!-- ─ Deblur ─ -->
-        <div class="section" data-section="deblur">
-          <div class="section-head">
-            <span class="section-title">Deblur</span>
-            <div class="toggle"></div>
-          </div>
-          <div class="section-body">
-            <div style="font-size:10px;color:#555;margin-bottom:10px;line-height:1.5;">
-              For genuinely blurred photos only. Applying this to an already-sharp
-              image creates ringing artefacts.
-            </div>
-            <select id="deblur-mode">
-              <option value="motion_shake">Anti-Shake (motion)</option>
-              <option value="defocus">Anti-Blur (out of focus)</option>
-            </select>
-            <div class="ctrl-group" style="margin-top:14px;">
-              <div class="ctrl-header">
-                <span class="ctrl-name">Strength</span>
-                <span class="ctrl-value" id="deblur-val">50</span>
-              </div>
-              <input type="range" id="deblur-slider" min="0" max="100" value="50" />
-            </div>
-            <div class="ctrl-group" id="deblur-angle-row">
-              <div class="ctrl-header">
-                <span class="ctrl-name">Motion angle</span>
-                <span class="ctrl-value" id="deblur-angle-val">0°</span>
-              </div>
-              <input type="range" id="deblur-angle" min="0" max="180" value="0" />
-            </div>
-          </div>
-        </div>
-
-        <!-- ─ Sharpen ─ -->
+        <!-- ─ Sharpen (includes deblur sub-models, Topaz Photo AI style) ─ -->
         <div class="section enabled" data-section="sharpen">
           <div class="section-head">
             <span class="section-title">Sharpen</span>
@@ -396,11 +363,11 @@
           </div>
           <div class="section-body">
             <select id="sharpen-model">
-              <option value="fine_detail">Fine Detail (multi-scale)</option>
               <option value="standard">Standard</option>
-              <option value="strong">Strong (big features)</option>
-              <option value="edge_aware">Edge-Aware (skip noise)</option>
-              <option value="clarity">Clarity (local contrast)</option>
+              <option value="strong">Strong</option>
+              <option value="lens_blur">Lens Blur</option>
+              <option value="motion_blur">Motion Blur</option>
+              <option value="refocus">Refocus</option>
             </select>
             <div class="ctrl-group" style="margin-top:14px;">
               <div class="ctrl-header">
@@ -408,6 +375,14 @@
                 <span class="ctrl-value" id="sharpen-val">50</span>
               </div>
               <input type="range" id="sharpen-slider" min="0" max="100" value="50" />
+            </div>
+            <!-- Shown only when Motion Blur model is selected -->
+            <div class="ctrl-group" id="sharpen-angle-row" style="display:none;">
+              <div class="ctrl-header">
+                <span class="ctrl-name">Motion angle</span>
+                <span class="ctrl-value" id="sharpen-angle-val">0°</span>
+              </div>
+              <input type="range" id="sharpen-angle" min="0" max="180" value="0" />
             </div>
           </div>
         </div>
@@ -473,13 +448,9 @@
     const elSharpenSlider = document.getElementById('sharpen-slider');
     const elSharpenVal    = document.getElementById('sharpen-val');
     const elSharpenModel  = document.getElementById('sharpen-model');
-
-    const elDeblurSlider  = document.getElementById('deblur-slider');
-    const elDeblurVal     = document.getElementById('deblur-val');
-    const elDeblurMode    = document.getElementById('deblur-mode');
-    const elDeblurAngle   = document.getElementById('deblur-angle');
-    const elDeblurAngleVal= document.getElementById('deblur-angle-val');
-    const elDeblurAngleRow= document.getElementById('deblur-angle-row');
+    const elSharpenAngle  = document.getElementById('sharpen-angle');
+    const elSharpenAngleVal = document.getElementById('sharpen-angle-val');
+    const elSharpenAngleRow = document.getElementById('sharpen-angle-row');
 
     const elSaveFormat    = document.getElementById('save-format');
 
@@ -637,16 +608,11 @@
           model:    elDenoiseModel.value,
           strength: elDenoiseSlider.value / 100,
         },
-        deblur: {
-          enabled:  sectionEnabled('deblur'),
-          mode:     elDeblurMode.value,
-          strength: elDeblurSlider.value / 100,
-          angle:    +elDeblurAngle.value,
-        },
         sharpen: {
           enabled:  sectionEnabled('sharpen'),
           model:    elSharpenModel.value,
           strength: elSharpenSlider.value / 100,
+          angle:    +elSharpenAngle.value,
         },
       };
     }
@@ -690,19 +656,13 @@
       elSharpenVal.textContent = elSharpenSlider.value;
       requestPreview();
     });
-    elSharpenModel.addEventListener('change', requestPreview);
-
-    elDeblurSlider.addEventListener('input', () => {
-      elDeblurVal.textContent = elDeblurSlider.value;
+    elSharpenModel.addEventListener('change', () => {
+      // Angle slider is only meaningful for the Motion Blur model
+      elSharpenAngleRow.style.display = (elSharpenModel.value === 'motion_blur') ? '' : 'none';
       requestPreview();
     });
-    elDeblurMode.addEventListener('change', () => {
-      // Angle is only meaningful for motion shake
-      elDeblurAngleRow.style.display = (elDeblurMode.value === 'motion_shake') ? '' : 'none';
-      requestPreview();
-    });
-    elDeblurAngle.addEventListener('input', () => {
-      elDeblurAngleVal.textContent = elDeblurAngle.value + '°';
+    elSharpenAngle.addEventListener('input', () => {
+      elSharpenAngleVal.textContent = elSharpenAngle.value + '°';
       requestPreview();
     });
 

@@ -155,6 +155,7 @@ def process_image(image: Image.Image, params: dict) -> Image.Image:
             result,
             strength=float(s.get("strength", 0.5)),
             model=s.get("model", "standard"),
+            motion_angle=float(s.get("angle", 0.0)),
         )
 
     return result

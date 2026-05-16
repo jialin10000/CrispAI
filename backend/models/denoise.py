@@ -20,11 +20,14 @@ from PIL import Image
 
 logger = logging.getLogger(__name__)
 
-# AI model targets (KAIR sigma scale, 0..255)
+# AI model targets (KAIR sigma scale, 0..255).
+# Matches Topaz Photo AI's Denoise sub-models: Normal / Strong / Extreme.
 _SIGMA_BY_MODEL = {
-    "normal": 15.0,
-    "strong": 25.0,
-    "severe": 50.0,
+    "normal":  15.0,
+    "strong":  25.0,
+    "extreme": 50.0,
+    # 'severe' kept as alias for backwards compat with earlier param payloads
+    "severe":  50.0,
 }
 
 
