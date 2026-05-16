@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CrispAI</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: #0d0d0d;
+      color: #e0e0e0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      font-size: 13px;
+    }
+
+    /* ── Top bar ── */
+    .topbar {
+      height: 44px;
+      background: #161616;
+      border-bottom: 1px solid #222;
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      gap: 12px;
+      flex-shrink: 0;
+      user-select: none;
+    }
+    .logo { font-size: 15px; font-weight: 700; letter-spacing: 1.5px; color: #fff; }
+    .sep { width: 1px; height: 18px; background: #2a2a2a; }
+    .filename { font-size: 12px; color: #555; }
+    .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+    .zoom-group { display: flex; align-items: center; gap: 4px; }
+    .icon-btn {
+      background: #222; border: 1px solid #2e2e2e; color: #888;
+      width: 28px; height: 28px; border-radius: 5px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px; line-height: 1; transition: background 0.12s, color 0.12s;
+    }
+    .icon-btn:hover { background: #2a2a2a; color: #ccc; }
+    .zoom-label { font-size: 11px; color: #555; min-width: 38px; text-align: center; }
+
+    /* ── Main layout ── */
+    .main { flex: 1; display: flex; overflow: hidden; }
+
+    /* ── Image area ── */
+    .image-area {
+      flex: 1;
+      background: #0d0d0d;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    .loading-overlay {
+      position: absolute;
+      inset: 0;
+      background: #0d0d0d;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      z-index: 30;
+    }
+    .spinner {
+      width: 36px; height: 36px;
+      border: 3px solid #222;
+      border-top-color: #4a9eff;
+      border-radius: 50%;
+      animation: spin 0.75s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-text { font-size: 13px; color: #666; }
+
+    .compare-wrap {
+      position: relative;
+      display: none;
+      cursor: ew-resize;
+      box-shadow: 0 8px 48px rgba(0,0,0,0.7);
+    }
+    .compare-wrap.visible { display: inline-block; }
+
+    .img-base { display: block; }
+
+    .processed-clip {
+      position: absolute;
+      top: 0; left: 0;
+      width: 50%;
+      height: 100%;
+      overflow: hidden;
+    }
+    .img-processed {
+      position: absolute;
+      top: 0; left: 0;
+      display: block;
+    }
+
+    .divider-line {
+      position: absolute;
+      top: 0; left: 50%;
+      transform: translateX(-50%);
+      width: 2px; height: 100%;
+      background: rgba(255,255,255,0.9);
+      z-index: 10;
+      cursor: ew-resize;
+      pointer-events: all;
+    }
+    .divider-handle {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 38px; height: 38px;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.5);
+      display: flex; align-items: center; justify-content: center;
+      color: #333; font-size: 11px; font-weight: 700;
+      letter-spacing: -1px;
+    }
+
+    .img-badge {
+      position: absolute; top: 14px;
+      background: rgba(0,0,0,0.65);
+      backdrop-filter: blur(4px);
+      color: #fff; font-size: 11px; font-weight: 600;
+      padding: 4px 10px; border-radius: 4px;
+      pointer-events: none; z-index: 5;
+      letter-spacing: 0.5px; text-transform: uppercase;
+    }
+    .badge-original { left: 14px; }
+    .badge-processed { right: 14px; }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width: 300px;
+      background: #161616;
+      border-left: 1px solid #222;
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+
+    .sidebar-scroll {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px 18px;
+    }
+    .sidebar-scroll::-webkit-scrollbar { width: 3px; }
+    .sidebar-scroll::-webkit-scrollbar-thumb { background: #2e2e2e; border-radius: 2px; }
+
+    .section { margin-bottom: 28px; }
+
+    .section-title {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1.2px;
+      color: #444;
+      margin-bottom: 16px;
+    }
+
+    .ctrl-group { margin-bottom: 14px; }
+
+    .ctrl-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .ctrl-name { font-size: 12px; color: #aaa; }
+    .ctrl-value {
+      font-size: 12px; color: #fff;
+      font-variant-numeric: tabular-nums;
+      min-width: 28px; text-align: right;
+    }
+
+    input[type=range] {
+      -webkit-appearance: none;
+      width: 100%; height: 3px;
+      background: #2a2a2a;
+      border-radius: 2px;
+      outline: none;
+      cursor: pointer;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      background: #4a9eff;
+      box-shadow: 0 0 0 2px rgba(74,158,255,0.25);
+      cursor: pointer;
+    }
+    input[type=range]:hover::-webkit-slider-thumb {
+      box-shadow: 0 0 0 4px rgba(74,158,255,0.3);
+    }
+
+    .divider-h { border: none; border-top: 1px solid #1e1e1e; margin: 0 0 24px; }
+
+    select {
+      width: 100%; background: #1e1e1e;
+      border: 1px solid #2a2a2a;
+      color: #ccc; padding: 8px 10px;
+      border-radius: 6px; font-size: 12px;
+      cursor: pointer; outline: none;
+      margin-top: 10px;
+      transition: border-color 0.15s;
+    }
+    select:hover { border-color: #3a3a3a; }
+    select:focus { border-color: #4a9eff; }
+
+    /* ── Status ── */
+    .status-area {
+      padding: 10px 18px;
+      min-height: 36px;
+      display: flex;
+      align-items: center;
+    }
+    .status-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: #333;
+      margin-right: 8px;
+      flex-shrink: 0;
+      transition: background 0.2s;
+    }
+    .status-text { font-size: 11px; color: #555; }
+    .status-area.working .status-dot { background: #4a9eff; animation: pulse 1s infinite; }
+    .status-area.working .status-text { color: #4a9eff; }
+    .status-area.done .status-dot { background: #4caf7d; animation: none; }
+    .status-area.done .status-text { color: #4caf7d; }
+    .status-area.error .status-dot { background: #ff6b6b; animation: none; }
+    .status-area.error .status-text { color: #ff6b6b; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+    /* ── Bottom buttons ── */
+    .sidebar-footer {
+      padding: 14px 18px 18px;
+      border-top: 1px solid #1e1e1e;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .btn-row { display: flex; gap: 8px; }
+
+    .btn {
+      flex: 1; padding: 10px 8px;
+      border-radius: 7px; font-size: 13px;
+      font-weight: 600; cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.15s;
+      letter-spacing: 0.2px;
+    }
+    .btn:disabled { opacity: 0.35; cursor: not-allowed; pointer-events: none; }
+
+    .btn-cancel {
+      background: #1e1e1e; border-color: #2a2a2a; color: #888;
+    }
+    .btn-cancel:hover { background: #242424; color: #aaa; }
+
+    .btn-apply {
+      background: #1d5bbf; border-color: #2469d6; color: #fff;
+    }
+    .btn-apply:hover { background: #2166cc; }
+    .btn-apply:active { background: #1a56b3; }
+
+    .version-note {
+      font-size: 10px; color: #2a2a2a; text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top bar -->
+  <div class="topbar">
+    <span class="logo">CrispAI</span>
+    <div class="sep"></div>
+    <span class="filename" id="filename">—</span>
+    <div class="topbar-right">
+      <div class="zoom-group">
+        <button class="icon-btn" id="btn-zoom-out" title="Zoom out">−</button>
+        <span class="zoom-label" id="zoom-label">Fit</span>
+        <button class="icon-btn" id="btn-zoom-in" title="Zoom in">+</button>
+        <button class="icon-btn" id="btn-zoom-fit" title="Fit to window">⊡</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main -->
+  <div class="main">
+
+    <!-- Image area -->
+    <div class="image-area" id="image-area">
+      <div class="loading-overlay" id="loading-overlay">
+        <div class="spinner"></div>
+        <div class="loading-text" id="loading-text">Loading image...</div>
+      </div>
+
+      <div class="compare-wrap" id="compare-wrap">
+        <img id="img-original" class="img-base" draggable="false" />
+        <div class="processed-clip" id="processed-clip">
+          <img id="img-processed" class="img-processed" draggable="false" />
+        </div>
+        <div class="divider-line" id="divider-line">
+          <div class="divider-handle">◀▶</div>
+        </div>
+        <span class="img-badge badge-original">Original</span>
+        <span class="img-badge badge-processed">CrispAI</span>
+      </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <div class="sidebar-scroll">
+
+        <div class="section">
+          <div class="section-title">Noise Reduction</div>
+          <div class="ctrl-group">
+            <div class="ctrl-header">
+              <span class="ctrl-name">Strength</span>
+              <span class="ctrl-value" id="denoise-val">50</span>
+            </div>
+            <input type="range" id="denoise-slider" min="0" max="100" value="50" />
+          </div>
+        </div>
+
+        <hr class="divider-h">
+
+        <div class="section">
+          <div class="section-title">Sharpening</div>
+          <div class="ctrl-group">
+            <div class="ctrl-header">
+              <span class="ctrl-name">Strength</span>
+              <span class="ctrl-value" id="sharpen-val">50</span>
+            </div>
+            <input type="range" id="sharpen-slider" min="0" max="100" value="50" />
+          </div>
+          <select id="sharpen-mode">
+            <option value="auto">Auto Detect</option>
+            <option value="motion_blur">Motion Blur  (Camera Shake)</option>
+            <option value="focus_blur">Focus Blur  (Soft Focus)</option>
+          </select>
+        </div>
+
+      </div>
+
+      <!-- Status -->
+      <div class="status-area" id="status-area">
+        <div class="status-dot"></div>
+        <span class="status-text" id="status-text">Ready</span>
+      </div>
+
+      <!-- Footer buttons -->
+      <div class="sidebar-footer">
+        <div class="btn-row">
+          <button class="btn btn-cancel" id="btn-cancel">Cancel</button>
+          <button class="btn btn-apply" id="btn-apply" disabled>Apply to PS</button>
+        </div>
+        <div class="version-note">CrispAI — AI Image Enhancement</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const sid  = new URLSearchParams(location.search).get('session');
+    const API  = location.origin;   // same host:port as this page
+
+    let imgW = 0, imgH = 0;
+    let currentScale = 1;
+    let debounceTimer = null;
+    let previewInflight = false;
+    let hasProcessed = false;
+
+    const elArea          = document.getElementById('image-area');
+    const elWrap          = document.getElementById('compare-wrap');
+    const elOriginal      = document.getElementById('img-original');
+    const elProcessed     = document.getElementById('img-processed');
+    const elClip          = document.getElementById('processed-clip');
+    const elDivider       = document.getElementById('divider-line');
+    const elLoading       = document.getElementById('loading-overlay');
+    const elLoadingText   = document.getElementById('loading-text');
+    const elFilename      = document.getElementById('filename');
+    const elZoomLabel     = document.getElementById('zoom-label');
+    const elDenoiseSlider = document.getElementById('denoise-slider');
+    const elDenoiseVal    = document.getElementById('denoise-val');
+    const elSharpenSlider = document.getElementById('sharpen-slider');
+    const elSharpenVal    = document.getElementById('sharpen-val');
+    const elSharpenMode   = document.getElementById('sharpen-mode');
+    const elStatusArea    = document.getElementById('status-area');
+    const elStatusText    = document.getElementById('status-text');
+    const elApply         = document.getElementById('btn-apply');
+    const elCancel        = document.getElementById('btn-cancel');
+
+    // ── Status helpers ──────────────────────────────────────────
+    function setStatus(text, state = '') {
+      elStatusText.textContent = text;
+      elStatusArea.className = 'status-area' + (state ? ' ' + state : '');
+    }
+
+    function setLoading(show, text = '') {
+      elLoading.style.display = show ? 'flex' : 'none';
+      if (text) elLoadingText.textContent = text;
+    }
+
+    // ── Image sizing ────────────────────────────────────────────
+    function applyScale(scale) {
+      currentScale = scale;
+      const dw = Math.round(imgW * scale);
+      const dh = Math.round(imgH * scale);
+      elOriginal.style.width  = dw + 'px';
+      elOriginal.style.height = dh + 'px';
+      elProcessed.style.width  = dw + 'px';
+      elProcessed.style.height = dh + 'px';
+      const pct = Math.round(scale * 100);
+      elZoomLabel.textContent = pct + '%';
+    }
+
+    function fitToWindow() {
+      const aw = elArea.clientWidth  - 40;
+      const ah = elArea.clientHeight - 40;
+      const scale = Math.min(1, aw / imgW, ah / imgH);
+      applyScale(scale);
+    }
+
+    // ── Load image from session ─────────────────────────────────
+    async function init() {
+      if (!sid) { setLoading(true); elLoadingText.textContent = 'No session — open from Photoshop.'; return; }
+      try {
+        const r    = await fetch(`${API}/session/${sid}/original`);
+        const data = await r.json();
+        imgW = data.width;
+        imgH = data.height;
+        elFilename.textContent = `${imgW} × ${imgH} px`;
+
+        elOriginal.src = `data:image/png;base64,${data.image}`;
+        elOriginal.onload = () => {
+          setLoading(false);
+          elWrap.classList.add('visible');
+          fitToWindow();
+          // show original on processed side until first preview
+          elProcessed.src = elOriginal.src;
+          requestPreview();
+        };
+      } catch (e) {
+        setLoading(true);
+        elLoadingText.textContent = 'Failed to load: ' + e.message;
+      }
+    }
+
+    // ── Preview ─────────────────────────────────────────────────
+    function requestPreview() {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(doPreview, 350);
+    }
+
+    async function doPreview() {
+      if (previewInflight) { debounceTimer = setTimeout(doPreview, 200); return; }
+      previewInflight = true;
+      setStatus('Updating preview…', 'working');
+      try {
+        const r = await fetch(`${API}/session/${sid}/preview`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(getParams()),
+        });
+        if (!r.ok) { const e = await r.json(); throw new Error(e.error || r.status); }
+        const data = await r.json();
+        elProcessed.src = `data:image/png;base64,${data.image}`;
+        hasProcessed = true;
+        elApply.disabled = false;
+        setStatus('Drag the divider to compare', 'done');
+      } catch (e) {
+        setStatus('Preview error: ' + e.message, 'error');
+      } finally {
+        previewInflight = false;
+      }
+    }
+
+    function getParams() {
+      return {
+        denoise_strength: elDenoiseSlider.value / 100,
+        sharpen_strength: elSharpenSlider.value / 100,
+        sharpen_mode: elSharpenMode.value,
+      };
+    }
+
+    // ── Sliders ─────────────────────────────────────────────────
+    elDenoiseSlider.addEventListener('input', () => {
+      elDenoiseVal.textContent = elDenoiseSlider.value;
+      requestPreview();
+    });
+    elSharpenSlider.addEventListener('input', () => {
+      elSharpenVal.textContent = elSharpenSlider.value;
+      requestPreview();
+    });
+    elSharpenMode.addEventListener('change', requestPreview);
+
+    // ── Divider drag ────────────────────────────────────────────
+    let dragging = false;
+
+    function moveDivider(clientX) {
+      const rect = elWrap.getBoundingClientRect();
+      const pct = Math.max(0, Math.min((clientX - rect.left) / rect.width, 1)) * 100;
+      elClip.style.width   = pct + '%';
+      elDivider.style.left = pct + '%';
+    }
+
+    elDivider.addEventListener('mousedown', e => { dragging = true; e.preventDefault(); });
+    document.addEventListener('mouseup',   () => { dragging = false; });
+    document.addEventListener('mousemove', e => { if (dragging) moveDivider(e.clientX); });
+    elWrap.addEventListener('click', e => moveDivider(e.clientX));
+
+    // ── Zoom ────────────────────────────────────────────────────
+    document.getElementById('btn-zoom-in').addEventListener('click', () => {
+      applyScale(Math.min(currentScale * 1.25, 4));
+    });
+    document.getElementById('btn-zoom-out').addEventListener('click', () => {
+      applyScale(Math.max(currentScale / 1.25, 0.05));
+    });
+    document.getElementById('btn-zoom-fit').addEventListener('click', fitToWindow);
+    window.addEventListener('resize', fitToWindow);
+
+    // ── Apply ───────────────────────────────────────────────────
+    elApply.addEventListener('click', async () => {
+      elApply.disabled = true;
+      elCancel.disabled = true;
+      setStatus('Processing full resolution…', 'working');
+      try {
+        const r = await fetch(`${API}/session/${sid}/apply`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(getParams()),
+        });
+        if (!r.ok) { const e = await r.json(); throw new Error(e.error || r.status); }
+        setStatus('Done! Sending to Photoshop…', 'done');
+        setTimeout(() => window.close(), 1200);
+      } catch (e) {
+        setStatus('Error: ' + e.message, 'error');
+        elApply.disabled = false;
+        elCancel.disabled = false;
+      }
+    });
+
+    // ── Cancel ──────────────────────────────────────────────────
+    elCancel.addEventListener('click', async () => {
+      try { await fetch(`${API}/session/${sid}/cancel`, { method: 'POST' }); } catch (_) {}
+      window.close();
+    });
+
+    init();
+  </script>
+</body>
+</html>
