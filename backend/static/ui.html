@@ -667,17 +667,41 @@
     });
 
     // ── Divider drag ────────────────────────────────────────────
+    // Pointer events fired on the whole compare-wrap (not just the 2px line),
+    // so the user can grab anywhere inside the photo to slide the divider.
     let dragging = false;
     function moveDivider(clientX) {
       const rect = elWrap.getBoundingClientRect();
+      if (rect.width === 0) return;
       const pct = Math.max(0, Math.min((clientX - rect.left) / rect.width, 1)) * 100;
       elClip.style.width   = pct + '%';
       elDivider.style.left = pct + '%';
     }
-    elDivider.addEventListener('mousedown', e => { dragging = true; e.preventDefault(); });
-    document.addEventListener('mouseup',   () => { dragging = false; });
-    document.addEventListener('mousemove', e => { if (dragging) moveDivider(e.clientX); });
-    elWrap.addEventListener('click', e => moveDivider(e.clientX));
+    elWrap.addEventListener('pointerdown', e => {
+      dragging = true;
+      try { elWrap.setPointerCapture(e.pointerId); } catch (_) {}
+      moveDivider(e.clientX);
+      e.preventDefault();
+    });
+    elWrap.addEventListener('pointermove', e => { if (dragging) moveDivider(e.clientX); });
+    elWrap.addEventListener('pointerup',   e => { dragging = false; });
+    elWrap.addEventListener('pointercancel', () => { dragging = false; });
+
+    // Double-click toggles between Fit-to-window and 100% zoom (Topaz convention)
+    elWrap.addEventListener('dblclick', e => {
+      e.preventDefault();
+      if (Math.abs(currentScale - 1.0) < 0.005) {
+        fitToWindow();
+      } else {
+        applyScale(1.0);
+        // Center the click point in the viewport when zooming to 100%
+        requestAnimationFrame(() => {
+          const r = elWrap.getBoundingClientRect();
+          elArea.scrollLeft += (e.clientX - r.left) - elArea.clientWidth / 2;
+          elArea.scrollTop  += (e.clientY - r.top)  - elArea.clientHeight / 2;
+        });
+      }
+    });
 
     // ── Save As ─────────────────────────────────────────────────
     elBtnSave.addEventListener('click', async () => {

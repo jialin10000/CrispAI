@@ -186,7 +186,13 @@ def _parse_params(data: dict) -> dict:
 @app.route("/")
 @app.route("/ui")
 def ui():
-    return send_from_directory(STATIC_DIR, "ui.html")
+    resp = send_from_directory(STATIC_DIR, "ui.html")
+    # Aggressive no-cache so the user always gets the latest UI without
+    # closing the Chrome --app window.
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
+    return resp
 
 
 # ── Health ─────────────────────────────────────────────────────────────────────
