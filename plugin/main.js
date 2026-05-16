@@ -244,7 +244,11 @@ function setupUI(node) {
     try {
       const { b64, width, height } = await getLayerPixels(doc);
       setCtrlStatus("Processing with AI (full res)...", "working");
-      const result = await callBackend("enhance", b64);
+      const result = await callBackend("enhance", b64, {
+        denoiseStrength: +denoiseSlider.value,
+        sharpenStrength: +sharpenSlider.value,
+        sharpenMode: sharpenMode.value,
+      });
       setCtrlStatus("Placing result in Photoshop...", "working");
       await placeResultAsLayer(doc, result.image, width, height, "CrispAI");
       setCtrlStatus("Done!", "done");
@@ -331,7 +335,11 @@ function setupUI(node) {
       imgOriginal.style.width  = width + "px";
       imgOriginal.style.height = height + "px";
       setCtrlStatus("Running AI on preview...", "working");
-      const result = await callBackend("enhance", b64);
+      const result = await callBackend("enhance", b64, {
+        denoiseStrength: +denoiseSlider.value,
+        sharpenStrength: +sharpenSlider.value,
+        sharpenMode: sharpenMode.value,
+      });
       imgProcessed.src = `data:image/png;base64,${result.image}`;
       imgProcessed.style.width  = width + "px";
       imgProcessed.style.height = height + "px";
@@ -414,13 +422,12 @@ async function checkServer() {
   if (!r.ok) throw new Error("Server not responding");
 }
 
-async function callBackend(action, b64Image) {
-  const root = document.querySelector("#crispai-modal");
+async function callBackend(action, b64Image, params = {}) {
   const body = {
     image: b64Image,
-    denoise_strength: (root ? root.querySelector("#denoise-strength").value : 50) / 100,
-    sharpen_strength: (root ? root.querySelector("#sharpen-strength").value : 50) / 100,
-    sharpen_mode: root ? root.querySelector("#sharpen-mode").value : "auto",
+    denoise_strength: (params.denoiseStrength ?? 50) / 100,
+    sharpen_strength: (params.sharpenStrength ?? 50) / 100,
+    sharpen_mode: params.sharpenMode ?? "auto",
   };
   const r = await fetch(`${SERVER}/${action}`, {
     method: "POST",
