@@ -51,6 +51,7 @@ def launch_app_window(url: str):
 
 from models.denoise import DenoiseModel
 from models.sharpen import SharpenModel
+from models.deblur  import DeblurModel
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -61,6 +62,7 @@ CORS(app)
 
 denoise_model = None
 sharpen_model = None
+deblur_model  = None
 sessions = {}   # sid -> { pil, width, height, filename, result_pil, status }
 
 PREVIEW_MAX = 1200   # px — preview is scaled to this, full-res apply is not
@@ -82,6 +84,14 @@ def get_sharpen_model():
     return sharpen_model
 
 
+def get_deblur_model():
+    global deblur_model
+    if deblur_model is None:
+        logger.info("Loading deblur model...")
+        deblur_model = DeblurModel()
+    return deblur_model
+
+
 # ── Image helpers ──────────────────────────────────────────────────────────────
 
 def rgba8_to_pil(b64: str, width: int, height: int) -> Image.Image:
@@ -100,11 +110,64 @@ def pil_to_rgba_b64(image: Image.Image) -> str:
     return base64.b64encode(image.convert("RGBA").tobytes()).decode("utf-8")
 
 
-def process_image(image: Image.Image, denoise_strength: float,
-                  sharpen_strength: float, sharpen_mode: str) -> Image.Image:
-    result = get_denoise_model().process(image, strength=denoise_strength)
-    result = get_sharpen_model().process(result, mode=sharpen_mode, strength=sharpen_strength)
+def process_image(image: Image.Image, params: dict) -> Image.Image:
+    """Three-stage pipeline (Topaz-style):  Denoise -> Deblur -> Sharpen.
+
+    params shape:
+      {
+        denoise: { enabled: bool, model: str, strength: 0..1 },
+        deblur:  { enabled: bool, mode: str,  strength: 0..1, angle: 0..180 },
+        sharpen: { enabled: bool, model: str, strength: 0..1 },
+      }
+    """
+    result = image
+
+    d = params.get("denoise", {})
+    if d.get("enabled"):
+        result = get_denoise_model().process(
+            result,
+            strength=float(d.get("strength", 0.5)),
+            model=d.get("model", "normal"),
+        )
+
+    b = params.get("deblur", {})
+    if b.get("enabled"):
+        result = get_deblur_model().process(
+            result,
+            mode=b.get("mode", "motion_shake"),
+            strength=float(b.get("strength", 0.5)),
+            motion_angle=float(b.get("angle", 0.0)),
+        )
+
+    s = params.get("sharpen", {})
+    if s.get("enabled"):
+        result = get_sharpen_model().process(
+            result,
+            strength=float(s.get("strength", 0.5)),
+            model=s.get("model", "standard"),
+        )
+
     return result
+
+
+def _parse_params(data: dict) -> dict:
+    """Accept either the new nested shape or the old flat one (back-compat)."""
+    if any(k in data for k in ("denoise", "deblur", "sharpen")):
+        return data
+    # Legacy flat keys
+    return {
+        "denoise": {
+            "enabled":  float(data.get("denoise_strength", 0)) > 0.01,
+            "model":    "normal",
+            "strength": float(data.get("denoise_strength", 0.5)),
+        },
+        "sharpen": {
+            "enabled":  float(data.get("sharpen_strength", 0)) > 0.01,
+            "model":    "standard",
+            "strength": float(data.get("sharpen_strength", 0.5)),
+        },
+        "deblur": {"enabled": False},
+    }
 
 
 # ── Static / UI ────────────────────────────────────────────────────────────────
@@ -198,17 +261,11 @@ def session_preview(sid):
     data = request.json or {}
     try:
         img = s["pil"].copy()
-        # Scale for fast preview
         w, h = img.size
         if max(w, h) > PREVIEW_MAX:
             scale = PREVIEW_MAX / max(w, h)
             img = img.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
-        result = process_image(
-            img,
-            float(data.get("denoise_strength", 0.5)),
-            float(data.get("sharpen_strength", 0.5)),
-            data.get("sharpen_mode", "auto"),
-        )
+        result = process_image(img, _parse_params(data))
         return jsonify({"image": pil_to_png_b64(result)})
     except Exception as e:
         logger.error(f"preview error: {e}")
@@ -223,12 +280,7 @@ def session_apply(sid):
         return jsonify({"error": "session not found"}), 404
     data = request.json or {}
     try:
-        result = process_image(
-            s["pil"].copy(),
-            float(data.get("denoise_strength", 0.5)),
-            float(data.get("sharpen_strength", 0.5)),
-            data.get("sharpen_mode", "auto"),
-        )
+        result = process_image(s["pil"].copy(), _parse_params(data))
         s["result_pil"]  = result
         s["result_rgba"] = pil_to_rgba_b64(result)   # for PS plugin
         s["status"]      = "ready"

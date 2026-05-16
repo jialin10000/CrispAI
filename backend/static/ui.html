@@ -144,12 +144,34 @@
     .sidebar-scroll::-webkit-scrollbar { width: 3px; }
     .sidebar-scroll::-webkit-scrollbar-thumb { background: #2e2e2e; border-radius: 2px; }
 
-    .section { margin-bottom: 28px; }
-    .section-title {
-      font-size: 10px; font-weight: 700;
-      text-transform: uppercase; letter-spacing: 1.2px;
-      color: #444; margin-bottom: 16px;
+    .section { margin-bottom: 22px; padding-bottom: 18px; border-bottom: 1px solid #1e1e1e; }
+    .section:last-child { border-bottom: none; }
+    .section.disabled .section-body { opacity: 0.35; pointer-events: none; }
+    .section-head {
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 14px; cursor: pointer; user-select: none;
     }
+    .section-title {
+      flex: 1; font-size: 11px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 1.2px;
+      color: #888;
+    }
+    .section.disabled .section-title { color: #444; }
+    .section.enabled  .section-title { color: #ddd; }
+
+    /* iOS-style toggle switch */
+    .toggle {
+      position: relative; width: 32px; height: 18px;
+      background: #2a2a2a; border-radius: 9px;
+      transition: background 0.2s; flex-shrink: 0;
+    }
+    .toggle::after {
+      content: ''; position: absolute; top: 2px; left: 2px;
+      width: 14px; height: 14px; border-radius: 50%;
+      background: #777; transition: all 0.2s;
+    }
+    .section.enabled .toggle { background: #1d5bbf; }
+    .section.enabled .toggle::after { left: 16px; background: #fff; }
     .ctrl-group { margin-bottom: 14px; }
     .ctrl-header {
       display: flex; align-items: center; justify-content: space-between;
@@ -296,33 +318,78 @@
     <div class="sidebar">
       <div class="sidebar-scroll">
 
-        <div class="section">
-          <div class="section-title">Noise Reduction</div>
-          <div class="ctrl-group">
-            <div class="ctrl-header">
-              <span class="ctrl-name">Strength</span>
-              <span class="ctrl-value" id="denoise-val">50</span>
+        <!-- ─ Denoise ─ -->
+        <div class="section enabled" data-section="denoise">
+          <div class="section-head">
+            <span class="section-title">Denoise</span>
+            <div class="toggle"></div>
+          </div>
+          <div class="section-body">
+            <select id="denoise-model">
+              <option value="normal">Normal</option>
+              <option value="strong">Strong</option>
+              <option value="severe">Severe (very noisy)</option>
+              <option value="impulse">Impulse (salt &amp; pepper)</option>
+            </select>
+            <div class="ctrl-group" style="margin-top:14px;">
+              <div class="ctrl-header">
+                <span class="ctrl-name">Strength</span>
+                <span class="ctrl-value" id="denoise-val">50</span>
+              </div>
+              <input type="range" id="denoise-slider" min="0" max="100" value="50" />
             </div>
-            <input type="range" id="denoise-slider" min="0" max="100" value="50" />
           </div>
         </div>
 
-        <hr class="divider-h">
-
-        <div class="section">
-          <div class="section-title">Sharpening</div>
-          <div class="ctrl-group">
-            <div class="ctrl-header">
-              <span class="ctrl-name">Strength</span>
-              <span class="ctrl-value" id="sharpen-val">50</span>
-            </div>
-            <input type="range" id="sharpen-slider" min="0" max="100" value="50" />
+        <!-- ─ Deblur ─ -->
+        <div class="section" data-section="deblur">
+          <div class="section-head">
+            <span class="section-title">Deblur</span>
+            <div class="toggle"></div>
           </div>
-          <select id="sharpen-mode">
-            <option value="auto">Auto Detect</option>
-            <option value="motion_blur">Motion Blur (Camera Shake)</option>
-            <option value="focus_blur">Focus Blur (Soft Focus)</option>
-          </select>
+          <div class="section-body">
+            <select id="deblur-mode">
+              <option value="motion_shake">Anti-Shake (motion)</option>
+              <option value="defocus">Anti-Blur (out of focus)</option>
+            </select>
+            <div class="ctrl-group" style="margin-top:14px;">
+              <div class="ctrl-header">
+                <span class="ctrl-name">Strength</span>
+                <span class="ctrl-value" id="deblur-val">50</span>
+              </div>
+              <input type="range" id="deblur-slider" min="0" max="100" value="50" />
+            </div>
+            <div class="ctrl-group" id="deblur-angle-row">
+              <div class="ctrl-header">
+                <span class="ctrl-name">Motion angle</span>
+                <span class="ctrl-value" id="deblur-angle-val">0°</span>
+              </div>
+              <input type="range" id="deblur-angle" min="0" max="180" value="0" />
+            </div>
+          </div>
+        </div>
+
+        <!-- ─ Sharpen ─ -->
+        <div class="section enabled" data-section="sharpen">
+          <div class="section-head">
+            <span class="section-title">Sharpen</span>
+            <div class="toggle"></div>
+          </div>
+          <div class="section-body">
+            <select id="sharpen-model">
+              <option value="standard">Standard</option>
+              <option value="strong">Strong</option>
+              <option value="edge_aware">Edge-Aware (skip noise)</option>
+              <option value="clarity">Clarity (local contrast)</option>
+            </select>
+            <div class="ctrl-group" style="margin-top:14px;">
+              <div class="ctrl-header">
+                <span class="ctrl-name">Strength</span>
+                <span class="ctrl-value" id="sharpen-val">50</span>
+              </div>
+              <input type="range" id="sharpen-slider" min="0" max="100" value="50" />
+            </div>
+          </div>
         </div>
 
       </div>
@@ -381,9 +448,19 @@
 
     const elDenoiseSlider = document.getElementById('denoise-slider');
     const elDenoiseVal    = document.getElementById('denoise-val');
+    const elDenoiseModel  = document.getElementById('denoise-model');
+
     const elSharpenSlider = document.getElementById('sharpen-slider');
     const elSharpenVal    = document.getElementById('sharpen-val');
-    const elSharpenMode   = document.getElementById('sharpen-mode');
+    const elSharpenModel  = document.getElementById('sharpen-model');
+
+    const elDeblurSlider  = document.getElementById('deblur-slider');
+    const elDeblurVal     = document.getElementById('deblur-val');
+    const elDeblurMode    = document.getElementById('deblur-mode');
+    const elDeblurAngle   = document.getElementById('deblur-angle');
+    const elDeblurAngleVal= document.getElementById('deblur-angle-val');
+    const elDeblurAngleRow= document.getElementById('deblur-angle-row');
+
     const elSaveFormat    = document.getElementById('save-format');
 
     const elStatusArea  = document.getElementById('status-area');
@@ -514,12 +591,39 @@
     document.getElementById('btn-zoom-fit').addEventListener('click', fitToWindow);
     window.addEventListener('resize', () => { if (imgW) fitToWindow(); });
 
+    // ── Section enable/disable toggles ──────────────────────────
+    document.querySelectorAll('.section').forEach(sec => {
+      const head = sec.querySelector('.section-head');
+      head.addEventListener('click', () => {
+        sec.classList.toggle('enabled');
+        requestPreview();
+      });
+    });
+
+    function sectionEnabled(name) {
+      const sec = document.querySelector(`.section[data-section="${name}"]`);
+      return sec && sec.classList.contains('enabled');
+    }
+
     // ── Preview ─────────────────────────────────────────────────
     function getParams() {
       return {
-        denoise_strength: elDenoiseSlider.value / 100,
-        sharpen_strength: elSharpenSlider.value / 100,
-        sharpen_mode:     elSharpenMode.value,
+        denoise: {
+          enabled:  sectionEnabled('denoise'),
+          model:    elDenoiseModel.value,
+          strength: elDenoiseSlider.value / 100,
+        },
+        deblur: {
+          enabled:  sectionEnabled('deblur'),
+          mode:     elDeblurMode.value,
+          strength: elDeblurSlider.value / 100,
+          angle:    +elDeblurAngle.value,
+        },
+        sharpen: {
+          enabled:  sectionEnabled('sharpen'),
+          model:    elSharpenModel.value,
+          strength: elSharpenSlider.value / 100,
+        },
       };
     }
 
@@ -556,11 +660,27 @@
       elDenoiseVal.textContent = elDenoiseSlider.value;
       requestPreview();
     });
+    elDenoiseModel.addEventListener('change', requestPreview);
+
     elSharpenSlider.addEventListener('input', () => {
       elSharpenVal.textContent = elSharpenSlider.value;
       requestPreview();
     });
-    elSharpenMode.addEventListener('change', requestPreview);
+    elSharpenModel.addEventListener('change', requestPreview);
+
+    elDeblurSlider.addEventListener('input', () => {
+      elDeblurVal.textContent = elDeblurSlider.value;
+      requestPreview();
+    });
+    elDeblurMode.addEventListener('change', () => {
+      // Angle is only meaningful for motion shake
+      elDeblurAngleRow.style.display = (elDeblurMode.value === 'motion_shake') ? '' : 'none';
+      requestPreview();
+    });
+    elDeblurAngle.addEventListener('input', () => {
+      elDeblurAngleVal.textContent = elDeblurAngle.value + '°';
+      requestPreview();
+    });
 
     // ── Divider drag ────────────────────────────────────────────
     let dragging = false;
