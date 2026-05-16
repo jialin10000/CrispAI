@@ -316,10 +316,17 @@ function setupUI(node) {
 
   async function loadPreview(doc) {
     placeholder.style.display = "block";
+    placeholder.textContent = "Loading preview...";
     container.classList.remove("ready");
     setCtrlStatus("Generating preview...", "working");
     try {
-      const { b64, width, height } = await getLayerPixels(doc, PREVIEW_SIZE);
+      // getPixels requires modal scope
+      let b64, width, height;
+      await core.executeAsModal(async () => {
+        const result = await getLayerPixels(doc, PREVIEW_SIZE);
+        b64 = result.b64; width = result.width; height = result.height;
+      }, { commandName: "CrispAI: read pixels" });
+
       imgOriginal.src = `data:image/png;base64,${b64}`;
       imgOriginal.style.width  = width + "px";
       imgOriginal.style.height = height + "px";
