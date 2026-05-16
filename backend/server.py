@@ -5,9 +5,11 @@ Photoshop plugin creates a session, web UI handles preview/apply.
 
 import io
 import os
+import time
 import uuid
 import base64
 import logging
+import threading
 import subprocess
 import webbrowser
 from flask import Flask, request, jsonify, send_from_directory
@@ -199,7 +201,49 @@ def ui():
 
 @app.route("/health", methods=["GET"])
 def health():
-    return jsonify({"status": "ok", "version": "0.3.0"})
+    return jsonify({"status": "ok", "version": "0.4.0"})
+
+
+# ── Lifecycle: shut down when no UI is active ─────────────────────────────────
+# Strategy: UI sends /ping every 30s while open, and a sendBeacon /shutdown when
+# its window closes. The watchdog thread exits the server if no ping has arrived
+# in 90s (e.g. force-killed window, network glitch). This makes the launcher
+# behave like a normal desktop app: close window -> server gone.
+
+_last_ping_at = time.time()
+PING_TIMEOUT_SEC = 90
+
+
+@app.route("/ping", methods=["POST"])
+def ping():
+    global _last_ping_at
+    _last_ping_at = time.time()
+    return ("", 204)
+
+
+@app.route("/shutdown", methods=["POST"])
+def shutdown_route():
+    logger.info("Shutdown requested by UI")
+    # Delay exit briefly so the response makes it back to the browser.
+    threading.Timer(0.3, lambda: os._exit(0)).start()
+    return ("", 204)
+
+
+def _watchdog():
+    """Exit the process if the UI hasn't pinged in PING_TIMEOUT_SEC.
+    Gives the user a generous grace period after their first request, so
+    a freshly-started server doesn't kill itself before the UI loads."""
+    grace_until = time.time() + 120
+    while True:
+        time.sleep(10)
+        if time.time() < grace_until:
+            continue
+        if time.time() - _last_ping_at > PING_TIMEOUT_SEC:
+            logger.info(f"No UI ping for {PING_TIMEOUT_SEC}s — shutting down")
+            os._exit(0)
+
+
+threading.Thread(target=_watchdog, daemon=True).start()
 
 
 # ── Session API ────────────────────────────────────────────────────────────────

@@ -415,6 +415,17 @@
   <script>
     const API = location.origin;
 
+    // ── Server lifecycle ──────────────────────────────────────────
+    // Keep the backend alive while this window is open. Tell it to shut
+    // down cleanly when the window closes — no more leftover pythonw.
+    function pingServer() { fetch(`${API}/ping`, { method: 'POST' }).catch(() => {}); }
+    pingServer();
+    setInterval(pingServer, 30000);
+    window.addEventListener('beforeunload', () => {
+      // sendBeacon survives page tear-down where fetch usually doesn't
+      navigator.sendBeacon(`${API}/shutdown`);
+    });
+
     let sid = null;
     let imgW = 0, imgH = 0;
     let currentScale = 1;
