@@ -108,8 +108,8 @@ function attachStyles(node) {
       border-radius: 4px; color: #fff; font-size: 12px; font-weight: 600; cursor: pointer; }
     .btn-launch:hover { background: #3468a3; }
 
-    .modal { width: 100%; height: 100%; }
-    .dialog-layout { display: flex; width: 100%; height: 100%; background: #1a1a1a; }
+    .modal { width: 100%; }
+    .dialog-layout { display: flex; flex-direction: column; width: 100%; background: #1a1a1a; }
 
     .nodoc-msg { font-size: 11px; color: #999; line-height: 1.5; }
     .server-cmd { font-size: 10px; color: #5aabff; background: #1a1a1a;
@@ -117,8 +117,8 @@ function attachStyles(node) {
     .btn-back { background: none; border: none; color: #666; font-size: 11px;
       cursor: pointer; text-align: left; padding: 2px 0; }
 
-    .compare-wrap { flex: 1; background: #111; display: flex; align-items: center;
-      justify-content: center; position: relative; overflow: hidden; }
+    .compare-wrap { width: 100%; min-height: 200px; background: #111; display: flex;
+      align-items: center; justify-content: center; position: relative; overflow: hidden; }
     .compare-container { position: relative; display: none; cursor: ew-resize; user-select: none; }
     .compare-container.ready { display: block; }
     .img-layer { display: block; }
@@ -138,7 +138,7 @@ function attachStyles(node) {
     .label-left { left: 12px; } .label-right { right: 12px; }
     .compare-placeholder { color: #555; font-size: 13px; }
 
-    .controls { width: 220px; flex-shrink: 0; background: #252525; padding: 20px 16px;
+    .controls { width: 100%; background: #252525; padding: 12px 14px;
       display: flex; flex-direction: column; gap: 16px; overflow-y: auto; }
     .ctrl-title { font-size: 16px; font-weight: 700; color: #fff; letter-spacing: 1px; }
     .ctrl-section { display: flex; flex-direction: column; gap: 6px; }
