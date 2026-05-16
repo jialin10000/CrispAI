@@ -136,7 +136,9 @@ function attachStyles(node) {
       color: #fff; font-size: 11px; padding: 3px 8px; border-radius: 3px;
       z-index: 5; pointer-events: none; }
     .label-left { left: 12px; } .label-right { right: 12px; }
-    .compare-placeholder { color: #555; font-size: 13px; }
+    .compare-placeholder { color: #aaa; font-size: 11px; padding: 12px;
+      white-space: pre-wrap; word-break: break-all; overflow-y: auto;
+      max-height: 300px; text-align: left; width: 100%; }
 
     .controls { width: 100%; background: #252525; padding: 12px 14px;
       display: flex; flex-direction: column; gap: 16px; overflow-y: auto; }
