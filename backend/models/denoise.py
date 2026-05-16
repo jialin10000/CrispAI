@@ -1,16 +1,18 @@
 """
-Noise reduction — Topaz-style models.
+Denoise — NAFNet-SIDD (Topaz-grade AI denoising).
 
-Normal / Strong / Severe are AI-based (FFDNet). One model, sigma-controlled
-strength — light, medium, heavy denoise respectively. The slider blends the
-AI result with the original so 0 = no effect, 100 = full AI output.
+Models map to NAFNet inference with strength-controlled blending:
+  Normal   - 50% AI strength
+  Strong   - 80% AI strength
+  Extreme  - 100% AI strength (full NAFNet output)
+  Impulse  - kept on median filter (AI doesn't help salt-and-pepper noise)
 
-Impulse (salt-and-pepper noise) uses median filter. AI denoisers trained on
-Gaussian/real noise don't handle impulse well; median is the right tool.
+NAFNet-SIDD is trained on the SIDD real-photo dataset and is genuinely
+state-of-the-art for camera sensor noise. ~70 MB weights, auto-downloaded
+from the official megvii Google Drive on first use.
 
-If the AI model fails to load (no internet on first run, no GPU/CPU torch,
-corrupted weights) we fall back to the classical OpenCV implementation so
-the app keeps working.
+Cascading fallbacks if anything goes wrong:
+  NAFNet -> FFDNet (smaller AI) -> OpenCV fastNlMeansDenoisingColored
 """
 
 import logging
@@ -20,18 +22,14 @@ from PIL import Image
 
 logger = logging.getLogger(__name__)
 
-# AI model targets (KAIR sigma scale, 0..255).
-# Matches Topaz Photo AI's Denoise sub-models: Normal / Strong / Extreme.
-_SIGMA_BY_MODEL = {
-    "normal":  15.0,
-    "strong":  25.0,
-    "extreme": 50.0,
-    # 'severe' kept as alias for backwards compat with earlier param payloads
-    "severe":  50.0,
+# Strength-vs-AI blend per model. Topaz also uses a model-specific intensity.
+_BLEND_BY_MODEL = {
+    "normal":  0.55,
+    "strong":  0.80,
+    "extreme": 1.00,
+    "severe":  1.00,    # legacy alias
 }
 
-
-# ── Classical fallbacks (used if AI fails) ──────────────────────
 
 def _to_bgr(image: Image.Image) -> np.ndarray:
     return cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
@@ -41,9 +39,7 @@ def _to_pil(bgr: np.ndarray) -> Image.Image:
     return Image.fromarray(cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB))
 
 
-def _classical_denoise(image: Image.Image, strength: float, sigma: float) -> Image.Image:
-    """OpenCV NLM fallback when AI is unavailable.
-    sigma 15/25/50 maps to NLM h ~ 5/9/16."""
+def _classical_fallback(image: Image.Image, sigma: float) -> Image.Image:
     h = sigma * 0.32
     bgr = _to_bgr(image)
     out = cv2.fastNlMeansDenoisingColored(
@@ -54,60 +50,84 @@ def _classical_denoise(image: Image.Image, strength: float, sigma: float) -> Ima
 
 
 def _denoise_impulse(image: Image.Image, strength: float) -> Image.Image:
-    """Median filter for salt-and-pepper / dead-pixel artifacts.
-    AI denoisers don't help with impulse noise — different statistics."""
     k = 3 if strength < 0.33 else (5 if strength < 0.66 else 7)
     bgr = _to_bgr(image)
     return _to_pil(cv2.medianBlur(bgr, k))
 
 
-# ── Public model ────────────────────────────────────────────────
-
 class DenoiseModel:
-    def __init__(self):
-        self._ai = None
-        self._ai_load_attempted = False
-        self._ai_failed_reason = None
+    """Lazy-loads NAFNet on first call. Holds the runner in memory after that."""
 
-    def _get_ai(self):
-        """Lazy-load the AI denoiser. Returns None if loading fails (and stays
-        None — we don't retry every call)."""
-        if self._ai is not None:
-            return self._ai
-        if self._ai_load_attempted:
+    def __init__(self):
+        self._nafnet = None
+        self._ffdnet = None
+        self._nafnet_attempted = False
+        self._ffdnet_attempted = False
+
+    def _get_nafnet(self):
+        if self._nafnet is not None:
+            return self._nafnet
+        if self._nafnet_attempted:
             return None
-        self._ai_load_attempted = True
+        self._nafnet_attempted = True
+        try:
+            from .nafnet_runner import NAFNetRunner
+            self._nafnet = NAFNetRunner.get("denoise")
+            logger.info("NAFNet-SIDD denoiser loaded")
+        except Exception as e:
+            logger.warning(f"NAFNet denoise unavailable, will try FFDNet fallback: {e}")
+        return self._nafnet
+
+    def _get_ffdnet(self):
+        if self._ffdnet is not None:
+            return self._ffdnet
+        if self._ffdnet_attempted:
+            return None
+        self._ffdnet_attempted = True
         try:
             from .ai_denoise import AIDenoiser
-            self._ai = AIDenoiser.get()
-            logger.info("AI denoiser loaded")
+            self._ffdnet = AIDenoiser.get()
+            logger.info("FFDNet fallback denoiser loaded")
         except Exception as e:
-            self._ai_failed_reason = str(e)
-            logger.warning(f"AI denoiser unavailable, falling back to OpenCV NLM: {e}")
-        return self._ai
+            logger.warning(f"FFDNet fallback also unavailable: {e}")
+        return self._ffdnet
 
     def process(self, image: Image.Image, strength: float = 0.5,
                 model: str = "normal") -> Image.Image:
         if strength <= 0.01:
             return image
-
         if model == "impulse":
             return _denoise_impulse(image, strength)
 
-        sigma = _SIGMA_BY_MODEL.get(model, _SIGMA_BY_MODEL["normal"])
+        base_image = image.convert("RGB")
 
-        ai = self._get_ai()
-        if ai is None:
-            return _classical_denoise(image, strength, sigma)
+        # Stage 1: NAFNet (best quality)
+        runner = self._get_nafnet()
+        if runner is not None:
+            try:
+                denoised = runner.run(base_image)
+                # Per-model AI intensity * user strength
+                model_blend = _BLEND_BY_MODEL.get(model, 0.55)
+                alpha = max(0.0, min(1.0, model_blend * strength))
+                if alpha >= 0.99:
+                    return denoised
+                return Image.blend(base_image, denoised, alpha)
+            except Exception as e:
+                logger.error(f"NAFNet inference failed: {e}")
 
-        try:
-            denoised = ai.denoise(image, sigma)
-        except Exception as e:
-            logger.error(f"AI inference failed, falling back: {e}")
-            return _classical_denoise(image, strength, sigma)
+        # Stage 2: FFDNet fallback (older AI, smaller)
+        ffd = self._get_ffdnet()
+        if ffd is not None:
+            try:
+                sigma_map = {"normal": 15.0, "strong": 25.0, "extreme": 50.0, "severe": 50.0}
+                sigma = sigma_map.get(model, 15.0)
+                denoised = ffd.denoise(base_image, sigma)
+                if strength >= 0.99:
+                    return denoised
+                return Image.blend(base_image, denoised, strength)
+            except Exception as e:
+                logger.error(f"FFDNet inference failed: {e}")
 
-        # Blend with original by strength so the slider does something:
-        # strength=1.0 -> full AI; strength=0.5 -> halfway between source and AI
-        if strength >= 0.99:
-            return denoised
-        return Image.blend(image.convert("RGB"), denoised, strength)
+        # Stage 3: classical OpenCV NLM
+        sigma_map = {"normal": 15.0, "strong": 25.0, "extreme": 50.0, "severe": 50.0}
+        return _classical_fallback(image, sigma_map.get(model, 15.0))

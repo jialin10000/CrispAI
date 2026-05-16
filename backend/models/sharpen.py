@@ -1,31 +1,32 @@
 """
-Sharpen — Topaz Photo AI-style models.
+Sharpen — Topaz Photo AI-style options.
 
-Five models matching Topaz's Sharpen sub-models exactly:
+  Standard     classical multi-scale unsharp — fine-detail edge boost.
+  Strong       classical larger-radius unsharp — coarse-feature contrast.
+  Lens Blur    NAFNet-GoPro AI deblur (mild blend) — wide-aperture softness.
+  Motion Blur  NAFNet-GoPro AI deblur (medium-to-full blend) — camera shake.
+  Refocus      NAFNet-GoPro AI deblur (full) + light unsharp — soft images.
 
-  Standard    - Multi-scale unsharp. General-purpose fine-detail enhancement.
-  Strong      - Heavier unsharp. Pushes contrast on bigger features.
-  Lens Blur   - Richardson-Lucy deconv with a disk PSF (recovers softness
-                from a slightly defocused lens — e.g. shooting wide-open).
-  Motion Blur - RL deconv with a linear PSF — recovers camera shake.
-                Has a motion-angle parameter (Topaz auto-detects; we let
-                the user dial it in until AI estimation is implemented).
-  Refocus     - Stronger Lens-Blur recovery + final fine-detail pass.
-                For genuinely out-of-focus shots, not just slightly soft.
+NAFNet-GoPro is trained on real motion-blurred photos and estimates the
+deblur implicitly — no need to specify a PSF or angle. This is the AI that
+replaces our earlier classical Richardson-Lucy deconvolution.
 
-Standard / Strong work on any image (they boost contrast).
-Lens Blur / Motion Blur / Refocus assume the image is actually blurred —
-applying them to a sharp image creates ringing artefacts.
+If the AI model fails to load (no internet on first run, no GPU/CPU torch,
+corrupted weights), Lens/Motion/Refocus fall back to the old RL deconv so
+the app still works.
 """
 
+import logging
 import cv2
 import numpy as np
 from PIL import Image
 
 from .deblur import disk_psf, motion_psf, richardson_lucy
 
+logger = logging.getLogger(__name__)
 
-# ── pure sharpen kernels ────────────────────────────────────────
+
+# ── pure sharpen kernels ─────────────────────────────────────────────────
 
 def _unsharp(rgb: np.ndarray, radius: float, amount: float) -> np.ndarray:
     blurred = cv2.GaussianBlur(rgb, (0, 0), sigmaX=radius, sigmaY=radius)
@@ -34,58 +35,101 @@ def _unsharp(rgb: np.ndarray, radius: float, amount: float) -> np.ndarray:
 
 
 def _multi_scale_sharpen(rgb: np.ndarray, strength: float,
-                         fine_amt_range=(0.4, 2.4),
-                         mid_amt_range=(0.2, 1.0)) -> np.ndarray:
-    """Multi-scale unsharp: subtract small + medium Gaussians, boost both
-    detail layers independently. Gives fine-texture lift with small halos."""
+                         fine_range=(0.4, 2.4), mid_range=(0.2, 1.0)) -> np.ndarray:
     f = rgb.astype(np.float32)
     fine_blur   = cv2.GaussianBlur(f, (0, 0), sigmaX=0.6)
     medium_blur = cv2.GaussianBlur(f, (0, 0), sigmaX=2.0)
     fine_detail   = f - fine_blur
     medium_detail = fine_blur - medium_blur
-    fine_amt = fine_amt_range[0] + (fine_amt_range[1] - fine_amt_range[0]) * strength
-    mid_amt  = mid_amt_range[0]  + (mid_amt_range[1]  - mid_amt_range[0])  * strength
+    fine_amt = fine_range[0] + (fine_range[1] - fine_range[0]) * strength
+    mid_amt  = mid_range[0]  + (mid_range[1]  - mid_range[0])  * strength
     out = f + fine_amt * fine_detail + mid_amt * medium_detail
     return np.clip(out, 0, 255).astype(np.uint8)
 
 
-# ── Topaz-equivalent model functions ────────────────────────────
+# ── AI deblur with classical fallback ────────────────────────────────────
 
-def _model_standard(rgb: np.ndarray, strength: float, _angle: float) -> np.ndarray:
-    return _multi_scale_sharpen(rgb, strength)
+class _DeblurAI:
+    """Singleton wrapper for NAFNet-GoPro."""
+    _runner = None
+    _attempted = False
 
-
-def _model_strong(rgb: np.ndarray, strength: float, _angle: float) -> np.ndarray:
-    """Larger radius, bigger amount. For coarser features."""
-    radius = 2.0 + 3.0 * strength    # 2..5
-    amount = 0.6 + 1.7 * strength    # 0.6..2.3
-    return _unsharp(rgb, radius, amount)
-
-
-def _model_lens_blur(rgb: np.ndarray, strength: float, _angle: float) -> np.ndarray:
-    """Mild disk-PSF deconv — for lens softness, wide-aperture haze."""
-    radius = 1.0 + 3.0 * strength       # 1..4
-    iters  = int(round(4 + 10 * strength))   # 4..14
-    psf = disk_psf(radius)
-    return richardson_lucy(rgb, psf, iters=iters)
-
-
-def _model_motion_blur(rgb: np.ndarray, strength: float, angle: float) -> np.ndarray:
-    """Line-PSF deconv along `angle` (degrees) — for camera shake."""
-    length = int(round(3 + 12 * strength))    # 3..15 px
-    iters  = int(round(5 + 12 * strength))    # 5..17
-    psf = motion_psf(length, angle)
-    return richardson_lucy(rgb, psf, iters=iters)
+    @classmethod
+    def get(cls):
+        if cls._runner is not None:
+            return cls._runner
+        if cls._attempted:
+            return None
+        cls._attempted = True
+        try:
+            from .nafnet_runner import NAFNetRunner
+            cls._runner = NAFNetRunner.get("deblur")
+            logger.info("NAFNet-GoPro deblur loaded")
+        except Exception as e:
+            logger.warning(f"NAFNet deblur unavailable, RL fallback will be used: {e}")
+        return cls._runner
 
 
-def _model_refocus(rgb: np.ndarray, strength: float, _angle: float) -> np.ndarray:
-    """Heavier disk deconv + final fine-detail pass. For seriously soft images."""
-    radius = 2.0 + 5.0 * strength       # 2..7  — bigger than Lens Blur
-    iters  = int(round(8 + 20 * strength))   # 8..28 — more iterations
-    psf = disk_psf(radius)
-    deblurred = richardson_lucy(rgb, psf, iters=iters)
-    # Top off with mild multi-scale detail boost
-    return _multi_scale_sharpen(deblurred, strength * 0.4)
+def _ai_deblur_with_blend(image: Image.Image, strength: float,
+                          model_strength: float,
+                          fallback_psf, fallback_iters_max: int) -> Image.Image:
+    """Run NAFNet-GoPro and blend with original by strength*model_strength.
+    Falls back to Richardson-Lucy with the supplied PSF on failure."""
+    base = image.convert("RGB")
+    ai = _DeblurAI.get()
+    if ai is not None:
+        try:
+            deblurred = ai.run(base)
+            alpha = max(0.0, min(1.0, strength * model_strength))
+            if alpha >= 0.99:
+                return deblurred
+            return Image.blend(base, deblurred, alpha)
+        except Exception as e:
+            logger.error(f"NAFNet deblur inference failed: {e}")
+
+    # Fallback: classical RL deconv (the old behaviour)
+    iters = int(round(4 + (fallback_iters_max - 4) * strength))
+    arr = np.array(base)
+    out = richardson_lucy(arr, fallback_psf, iters=iters)
+    return Image.fromarray(out)
+
+
+# ── Model functions ──────────────────────────────────────────────────────
+
+def _model_standard(image: Image.Image, strength: float, _angle: float) -> Image.Image:
+    return Image.fromarray(_multi_scale_sharpen(np.array(image.convert("RGB")), strength))
+
+
+def _model_strong(image: Image.Image, strength: float, _angle: float) -> Image.Image:
+    radius = 2.0 + 3.0 * strength
+    amount = 0.6 + 1.7 * strength
+    return Image.fromarray(_unsharp(np.array(image.convert("RGB")), radius, amount))
+
+
+def _model_lens_blur(image: Image.Image, strength: float, _angle: float) -> Image.Image:
+    """Mild deblur for slightly-soft images (wide-aperture lens softness)."""
+    psf = disk_psf(1.0 + 3.0 * strength)
+    return _ai_deblur_with_blend(image, strength, model_strength=0.55,
+                                 fallback_psf=psf, fallback_iters_max=14)
+
+
+def _model_motion_blur(image: Image.Image, strength: float, angle: float) -> Image.Image:
+    """Anti-shake. NAFNet handles arbitrary motion — angle is unused for AI
+    but still drives the fallback PSF."""
+    psf = motion_psf(int(round(3 + 12 * strength)), angle)
+    return _ai_deblur_with_blend(image, strength, model_strength=0.85,
+                                 fallback_psf=psf, fallback_iters_max=17)
+
+
+def _model_refocus(image: Image.Image, strength: float, _angle: float) -> Image.Image:
+    """Heavier recovery for genuinely out-of-focus shots. Full-strength
+    NAFNet + a final fine-detail pass."""
+    psf = disk_psf(2.0 + 5.0 * strength)
+    deblurred = _ai_deblur_with_blend(image, strength, model_strength=1.0,
+                                      fallback_psf=psf, fallback_iters_max=28)
+    arr = np.array(deblurred)
+    final = _multi_scale_sharpen(arr, strength * 0.35)
+    return Image.fromarray(final)
 
 
 _METHODS = {
@@ -106,6 +150,4 @@ class SharpenModel:
         if strength <= 0.01:
             return image
         fn = _METHODS.get(model, _model_standard)
-        arr = np.array(image.convert("RGB"))
-        out = fn(arr, float(strength), float(motion_angle))
-        return Image.fromarray(out)
+        return fn(image, float(strength), float(motion_angle))
