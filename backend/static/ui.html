@@ -79,8 +79,16 @@
     /* ── Image area ── */
     .image-area {
       flex: 1; background: #0d0d0d; position: relative;
+      overflow: auto;          /* scroll when zoomed in past viewport size */
+    }
+    .image-area::-webkit-scrollbar { width: 10px; height: 10px; }
+    .image-area::-webkit-scrollbar-track { background: #0d0d0d; }
+    .image-area::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 5px; }
+    .image-area::-webkit-scrollbar-thumb:hover { background: #3a3a3a; }
+    .image-area-inner {
+      min-width: 100%; min-height: 100%;
       display: flex; align-items: center; justify-content: center;
-      overflow: hidden;
+      padding: 20px;
     }
 
     .loading-overlay {
@@ -305,18 +313,20 @@
         <div class="loading-text" id="loading-text">Loading…</div>
       </div>
 
-      <div class="compare-wrap" id="compare-wrap">
-        <!-- Processed image is the base (always fully visible). -->
-        <img id="img-processed" class="img-base" draggable="false" />
-        <!-- Original image overlays the left half (the "before"). -->
-        <div class="original-clip" id="original-clip">
-          <img id="img-original" class="img-overlay" draggable="false" />
+      <div class="image-area-inner">
+        <div class="compare-wrap" id="compare-wrap">
+          <!-- Processed image is the base (always fully visible). -->
+          <img id="img-processed" class="img-base" draggable="false" />
+          <!-- Original image overlays the left half (the "before"). -->
+          <div class="original-clip" id="original-clip">
+            <img id="img-original" class="img-overlay" draggable="false" />
+          </div>
+          <div class="divider-line" id="divider-line">
+            <div class="divider-handle">◀▶</div>
+          </div>
+          <span class="img-badge badge-original">Original</span>
+          <span class="img-badge badge-processed">CrispAI</span>
         </div>
-        <div class="divider-line" id="divider-line">
-          <div class="divider-handle">◀▶</div>
-        </div>
-        <span class="img-badge badge-original">Original</span>
-        <span class="img-badge badge-processed">CrispAI</span>
       </div>
     </div>
 
@@ -567,6 +577,10 @@
 
         elOriginal.src = `data:image/png;base64,${orig.image}`;
         elOriginal.onload = () => {
+          // Use the displayed image's actual size for zoom math, not the
+          // original full-res dimensions (preview is downscaled for speed).
+          imgW = elOriginal.naturalWidth;
+          imgH = elOriginal.naturalHeight;
           setLoading(false);
           elWrap.classList.add('visible');
           fitToWindow();
