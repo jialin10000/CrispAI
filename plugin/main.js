@@ -371,23 +371,25 @@ async function getLayerPixels(doc, maxSize = null) {
   });
 
   const buffer = await pixelData.imageData.getData();
-  const canvas = new OffscreenCanvas(pw, ph);
+  const canvas = document.createElement("canvas");
+  canvas.width = pw;
+  canvas.height = ph;
   const ctx = canvas.getContext("2d");
   ctx.putImageData(new ImageData(new Uint8ClampedArray(buffer), pw, ph), 0, 0);
-  const blob = await canvas.convertToBlob({ type: "image/png" });
-  const ab = await blob.arrayBuffer();
-  const bytes = new Uint8Array(ab);
-  let binary = "";
-  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-  return { b64: btoa(binary), width: pw, height: ph };
+  const dataUrl = canvas.toDataURL("image/png");
+  const b64 = dataUrl.split(",")[1];
+  return { b64, width: pw, height: ph };
 }
 
 async function placeResultAsLayer(doc, b64, width, height, name) {
-  const blob = await fetch(`data:image/png;base64,${b64}`).then(r => r.blob());
-  const bitmap = await createImageBitmap(blob);
-  const canvas = new OffscreenCanvas(width, height);
+  const img = new Image();
+  img.src = `data:image/png;base64,${b64}`;
+  await new Promise((res, rej) => { img.onload = res; img.onerror = rej; });
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
   const ctx = canvas.getContext("2d");
-  ctx.drawImage(bitmap, 0, 0);
+  ctx.drawImage(img, 0, 0);
   const imageData = ctx.getImageData(0, 0, width, height);
 
   await core.executeAsModal(async () => {
