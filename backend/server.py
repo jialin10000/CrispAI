@@ -77,10 +77,12 @@ sharpen_model = None
 deblur_model  = None
 sessions = {}   # sid -> { pil, width, height, filename, result_pil, status }
 
-# Display + preview resolution. Sony A1 / R5 / Z9-class 50 MP photos are
-# 8000+ px wide; downscaling to 2400 keeps them visibly sharp while AI
-# inference stays sub-second on a midrange GPU. Save-As still uses full-res.
-PREVIEW_MAX = 2400
+# AI preview resolution for the live-slider pipeline. NAFNet runs in fp32
+# for correctness (fp16 produces checkerboard artefacts), so we trade some
+# preview resolution for slider responsiveness — 1600 px at fp32 ≈ 1 s on
+# RTX 4070. Original image is still served at FULL resolution; this only
+# affects the processed-side rendering until Full-Quality Preview is run.
+PREVIEW_MAX = 1600
 
 
 def get_denoise_model():

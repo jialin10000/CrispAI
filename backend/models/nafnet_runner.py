@@ -101,12 +101,11 @@ class NAFNetRunner:
         self.model.load_state_dict(state, strict=True)
         self.model.eval().to(self.device)
 
-        # fp16 on CUDA halves memory + ~2x faster, negligible quality loss
-        if self.device.type == "cuda":
-            self.model = self.model.half()
-            self._half = True
-        else:
-            self._half = False
+        # NAFNet is deep enough that fp16 accumulates noticeable error and
+        # can produce extreme colour-checkerboard artefacts on real photos.
+        # We keep the model in fp32 — RTX-class GPUs still fit 50 MP tiles
+        # comfortably and inference stays well under 1 s per 1 MP tile.
+        self._half = False
 
         # Tiled inference to keep VRAM bounded on big photos.
         # 768 px tile + 32 px overlap fits comfortably on a 6-8 GB GPU.
