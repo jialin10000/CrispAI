@@ -101,12 +101,15 @@
       cursor: ew-resize; box-shadow: 0 8px 48px rgba(0,0,0,0.7);
     }
     .compare-wrap.visible { display: inline-block; }
+    /* Base layer = processed (always fully visible).
+       Overlay = original, clipped to left half. Drag divider to expose
+       more or less of the processed image. */
     .img-base { display: block; }
-    .processed-clip {
+    .original-clip {
       position: absolute; top: 0; left: 0;
       width: 50%; height: 100%; overflow: hidden;
     }
-    .img-processed {
+    .img-overlay {
       position: absolute; top: 0; left: 0; display: block;
     }
     .divider-line {
@@ -303,9 +306,11 @@
       </div>
 
       <div class="compare-wrap" id="compare-wrap">
-        <img id="img-original" class="img-base" draggable="false" />
-        <div class="processed-clip" id="processed-clip">
-          <img id="img-processed" class="img-processed" draggable="false" />
+        <!-- Processed image is the base (always fully visible). -->
+        <img id="img-processed" class="img-base" draggable="false" />
+        <!-- Original image overlays the left half (the "before"). -->
+        <div class="original-clip" id="original-clip">
+          <img id="img-original" class="img-overlay" draggable="false" />
         </div>
         <div class="divider-line" id="divider-line">
           <div class="divider-handle">◀▶</div>
@@ -348,6 +353,10 @@
             <div class="toggle"></div>
           </div>
           <div class="section-body">
+            <div style="font-size:10px;color:#555;margin-bottom:10px;line-height:1.5;">
+              For genuinely blurred photos only. Applying this to an already-sharp
+              image creates ringing artefacts.
+            </div>
             <select id="deblur-mode">
               <option value="motion_shake">Anti-Shake (motion)</option>
               <option value="defocus">Anti-Blur (out of focus)</option>
@@ -377,8 +386,9 @@
           </div>
           <div class="section-body">
             <select id="sharpen-model">
+              <option value="fine_detail">Fine Detail (multi-scale)</option>
               <option value="standard">Standard</option>
-              <option value="strong">Strong</option>
+              <option value="strong">Strong (big features)</option>
               <option value="edge_aware">Edge-Aware (skip noise)</option>
               <option value="clarity">Clarity (local contrast)</option>
             </select>
@@ -436,7 +446,7 @@
     const elWrap        = document.getElementById('compare-wrap');
     const elOriginal    = document.getElementById('img-original');
     const elProcessed   = document.getElementById('img-processed');
-    const elClip        = document.getElementById('processed-clip');
+    const elClip        = document.getElementById('original-clip');   // now wraps the ORIGINAL
     const elDivider     = document.getElementById('divider-line');
     const elLoading     = document.getElementById('loading-overlay');
     const elLoadingText = document.getElementById('loading-text');

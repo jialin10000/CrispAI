@@ -250,13 +250,21 @@ def session_upload():
 
 @app.route("/session/<sid>/original", methods=["GET"])
 def session_original(sid):
-    """Web UI fetches the original image for display."""
+    """Original image for display. Downscaled to PREVIEW_MAX so it matches
+    the preview pipeline's resolution — otherwise the two compare panels
+    would go through different resampling (browser-scale vs LANCZOS) and
+    look subtly different even when strength is 0."""
     s = sessions.get(sid)
     if not s:
         return jsonify({"error": "session not found"}), 404
+    img = s["pil"]
+    w, h = img.size
+    if max(w, h) > PREVIEW_MAX:
+        scale = PREVIEW_MAX / max(w, h)
+        img = img.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
     return jsonify({
-        "image":  pil_to_png_b64(s["pil"]),
-        "width":  s["width"],
+        "image":  pil_to_png_b64(img),
+        "width":  s["width"],    # original (true) dimensions, for UI layout
         "height": s["height"],
     })
 
