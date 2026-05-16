@@ -244,15 +244,20 @@ function setupUI(node) {
     setCtrlStatus("Exporting full resolution...", "working");
     setButtonsDisabled(true);
     try {
-      const { b64, width, height } = await getLayerPixels(doc);
+      let b64, width, height;
+      await core.executeAsModal(async () => {
+        const r = await getLayerPixels(doc);
+        b64 = r.b64; width = r.width; height = r.height;
+      }, { commandName: "CrispAI: export pixels" });
       setCtrlStatus("Processing with AI (full res)...", "working");
       const result = await callBackend("enhance", b64, {
+        width, height,
         denoiseStrength: +denoiseSlider.value,
         sharpenStrength: +sharpenSlider.value,
         sharpenMode: sharpenMode.value,
       });
       setCtrlStatus("Placing result in Photoshop...", "working");
-      await placeResultAsLayer(doc, result.image, width, height, "CrispAI");
+      await placeResultAsLayer(doc, result.raw_rgba, width, height, "CrispAI");
       setCtrlStatus("Done!", "done");
       setTimeout(() => { showView("main"); }, 800);
     } catch (e) {
@@ -333,15 +338,16 @@ function setupUI(node) {
         b64 = result.b64; width = result.width; height = result.height;
       }, { commandName: "CrispAI: read pixels" });
 
-      imgOriginal.src = `data:image/png;base64,${b64}`;
-      imgOriginal.style.width  = width + "px";
-      imgOriginal.style.height = height + "px";
       setCtrlStatus("Running AI on preview...", "working");
       const result = await callBackend("enhance", b64, {
+        width, height,
         denoiseStrength: +denoiseSlider.value,
         sharpenStrength: +sharpenSlider.value,
         sharpenMode: sharpenMode.value,
       });
+      imgOriginal.src = `data:image/png;base64,${result.original_png}`;
+      imgOriginal.style.width  = width + "px";
+      imgOriginal.style.height = height + "px";
       imgProcessed.src = `data:image/png;base64,${result.image}`;
       imgProcessed.style.width  = width + "px";
       imgProcessed.style.height = height + "px";
@@ -358,6 +364,25 @@ function setupUI(node) {
 }
 
 // ── PS pixel helpers ───────────────────────────────────────────
+// UXP canvas API is too limited (no createImageData, no toDataURL).
+// Encode/decode raw RGBA bytes directly with btoa/atob instead.
+
+function uint8ToBase64(bytes) {
+  let binary = "";
+  const chunk = 8192;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, Math.min(i + chunk, bytes.length)));
+  }
+  return btoa(binary);
+}
+
+function base64ToUint8(b64) {
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
 async function getLayerPixels(doc, maxSize = null) {
   const layer = doc.activeLayers[0];
   const bounds = layer.bounds;
@@ -381,29 +406,12 @@ async function getLayerPixels(doc, maxSize = null) {
   });
 
   const buffer = await pixelData.imageData.getData();
-  const canvas = document.createElement("canvas");
-  canvas.width = pw;
-  canvas.height = ph;
-  const ctx = canvas.getContext("2d");
-  const imageData = ctx.createImageData(pw, ph);
-  imageData.data.set(new Uint8ClampedArray(buffer));
-  ctx.putImageData(imageData, 0, 0);
-  const dataUrl = canvas.toDataURL("image/png");
-  const b64 = dataUrl.split(",")[1];
+  const b64 = uint8ToBase64(new Uint8Array(buffer));
   return { b64, width: pw, height: ph };
 }
 
-async function placeResultAsLayer(doc, b64, width, height, name) {
-  const img = new Image();
-  img.src = `data:image/png;base64,${b64}`;
-  await new Promise((res, rej) => { img.onload = res; img.onerror = rej; });
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext("2d");
-  ctx.drawImage(img, 0, 0);
-  const imageData = ctx.getImageData(0, 0, width, height);
-
+async function placeResultAsLayer(doc, b64rgba, width, height, name) {
+  const bytes = base64ToUint8(b64rgba);
   await core.executeAsModal(async () => {
     const layer = await doc.createPixelLayer({ name });
     await imaging.putPixels({
@@ -413,7 +421,7 @@ async function placeResultAsLayer(doc, b64, width, height, name) {
       colorProfile: "sRGB IEC61966-2.1",
       colorSpace: "RGB",
       imageData: imaging.createImageDataFromBuffer(
-        imageData.data.buffer,
+        bytes.buffer,
         { width, height, components: 4, colorProfile: "sRGB IEC61966-2.1" }
       ),
     });
@@ -429,6 +437,9 @@ async function checkServer() {
 async function callBackend(action, b64Image, params = {}) {
   const body = {
     image: b64Image,
+    format: "rgba8",
+    width: params.width,
+    height: params.height,
     denoise_strength: (params.denoiseStrength ?? 50) / 100,
     sharpen_strength: (params.sharpenStrength ?? 50) / 100,
     sharpen_mode: params.sharpenMode ?? "auto",

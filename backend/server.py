@@ -37,15 +37,29 @@ def get_sharpen_model():
     return sharpen_model
 
 
-def decode_image(b64_string: str) -> Image.Image:
-    data = base64.b64decode(b64_string)
-    return Image.open(io.BytesIO(data)).convert("RGB")
+def decode_image(data: dict) -> Image.Image:
+    b64 = data["image"]
+    fmt = data.get("format", "png")
+    if fmt == "rgba8":
+        # Raw RGBA bytes sent from UXP imaging.getPixels()
+        width = int(data["width"])
+        height = int(data["height"])
+        raw = base64.b64decode(b64)
+        return Image.frombytes("RGBA", (width, height), raw).convert("RGB")
+    else:
+        raw = base64.b64decode(b64)
+        return Image.open(io.BytesIO(raw)).convert("RGB")
 
 
-def encode_image(image: Image.Image) -> str:
+def encode_png(image: Image.Image) -> str:
     buf = io.BytesIO()
     image.save(buf, format="PNG")
     return base64.b64encode(buf.getvalue()).decode("utf-8")
+
+
+def encode_rgba(image: Image.Image) -> str:
+    """Raw RGBA bytes for imaging.putPixels() in UXP."""
+    return base64.b64encode(image.convert("RGBA").tobytes()).decode("utf-8")
 
 
 @app.route("/health", methods=["GET"])
@@ -62,10 +76,10 @@ def denoise():
     strength = float(data.get("strength", 0.5))
 
     try:
-        image = decode_image(data["image"])
+        image = decode_image(data)
         model = get_denoise_model()
         result = model.process(image, strength=strength)
-        return jsonify({"image": encode_image(result)})
+        return jsonify({"image": encode_png(result)})
     except Exception as e:
         logger.error(f"Denoise error: {e}")
         return jsonify({"error": str(e)}), 500
@@ -81,10 +95,10 @@ def sharpen():
     strength = float(data.get("strength", 0.5))
 
     try:
-        image = decode_image(data["image"])
+        image = decode_image(data)
         model = get_sharpen_model()
         result = model.process(image, mode=mode, strength=strength)
-        return jsonify({"image": encode_image(result)})
+        return jsonify({"image": encode_png(result)})
     except Exception as e:
         logger.error(f"Sharpen error: {e}")
         return jsonify({"error": str(e)}), 500
@@ -102,10 +116,14 @@ def enhance():
     sharpen_mode = data.get("sharpen_mode", "auto")
 
     try:
-        image = decode_image(data["image"])
-        image = get_denoise_model().process(image, strength=denoise_strength)
-        image = get_sharpen_model().process(image, mode=sharpen_mode, strength=sharpen_strength)
-        return jsonify({"image": encode_image(image)})
+        original = decode_image(data)
+        result = get_denoise_model().process(original, strength=denoise_strength)
+        result = get_sharpen_model().process(result, mode=sharpen_mode, strength=sharpen_strength)
+        return jsonify({
+            "image": encode_png(result),           # processed PNG for <img> display
+            "original_png": encode_png(original),  # original PNG for <img> display
+            "raw_rgba": encode_rgba(result),        # processed RGBA bytes for putPixels
+        })
     except Exception as e:
         logger.error(f"Enhance error: {e}")
         return jsonify({"error": str(e)}), 500
