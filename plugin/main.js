@@ -95,19 +95,20 @@ const PANEL_HTML = `
 
 // ── CSS ────────────────────────────────────────────────────────
 function attachStyles(node) {
+  // Make the node fill the panel and allow absolute children
+  node.style.cssText = "width:100%; height:100%; position:relative; overflow:hidden; display:block;";
+
   const style = document.createElement("style");
   style.textContent = `
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    :host, .panel-root { display: flex; flex-direction: column; width: 100%; height: 100%; }
-    .panel { padding: 14px; display: flex; flex-direction: column; gap: 8px;
-      width: 100%; }
+    .panel { padding: 14px; display: flex; flex-direction: column; gap: 8px; width: 100%; }
     .panel-logo { font-size: 16px; font-weight: 700; color: #fff; letter-spacing: 1px; }
     .panel-status { font-size: 10px; color: #888; }
     .btn-launch { padding: 8px; background: #2d5a8e; border: 1px solid #3a72b0;
       border-radius: 4px; color: #fff; font-size: 12px; font-weight: 600; cursor: pointer; }
     .btn-launch:hover { background: #3468a3; }
 
-    .modal { position: fixed; inset: 0; z-index: 999; }
+    .modal { position: absolute; inset: 0; z-index: 999; }
     .dialog-layout { display: flex; width: 100%; height: 100%; background: #1a1a1a; }
 
     .nodoc-msg { font-size: 11px; color: #999; line-height: 1.5; }
@@ -198,10 +199,8 @@ function setupUI(node) {
 
   // ── Open button: if no doc, go straight to file picker ──
   btnOpen.addEventListener("click", async () => {
-    if (!app.activeDocument) {
-      await pickAndOpenFile();
-      return;
-    }
+    const doc = app.activeDocument;
+    if (!doc) { await pickAndOpenFile(); return; }
     await openMainModal();
   });
 
