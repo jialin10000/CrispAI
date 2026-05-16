@@ -109,11 +109,12 @@
       cursor: ew-resize; box-shadow: 0 8px 48px rgba(0,0,0,0.7);
     }
     .compare-wrap.visible { display: inline-block; }
-    /* Base layer = processed (always fully visible).
-       Overlay = original, clipped to left half. Drag divider to expose
-       more or less of the processed image. */
+    /* Base layer = original (always fully visible underneath).
+       Overlay = processed image, clipped to left half. Drag the divider
+       to grow / shrink the processed-image side. User preference: result
+       on LEFT, untouched original on RIGHT. */
     .img-base { display: block; }
-    .original-clip {
+    .left-clip {
       position: absolute; top: 0; left: 0;
       width: 50%; height: 100%; overflow: hidden;
     }
@@ -142,8 +143,8 @@
       pointer-events: none; z-index: 5;
       letter-spacing: 0.5px; text-transform: uppercase;
     }
-    .badge-original  { left: 14px; }
-    .badge-processed { right: 14px; }
+    .badge-left  { left: 14px; }
+    .badge-right { right: 14px; }
 
     /* ── Sidebar ── */
     .sidebar {
@@ -315,17 +316,17 @@
 
       <div class="image-area-inner">
         <div class="compare-wrap" id="compare-wrap">
-          <!-- Processed image is the base (always fully visible). -->
-          <img id="img-processed" class="img-base" draggable="false" />
-          <!-- Original image overlays the left half (the "before"). -->
-          <div class="original-clip" id="original-clip">
-            <img id="img-original" class="img-overlay" draggable="false" />
+          <!-- Original image is the base (always fully visible underneath). -->
+          <img id="img-original" class="img-base" draggable="false" />
+          <!-- Processed overlays the left half (the "result" side). -->
+          <div class="left-clip" id="left-clip">
+            <img id="img-processed" class="img-overlay" draggable="false" />
           </div>
           <div class="divider-line" id="divider-line">
             <div class="divider-handle">◀▶</div>
           </div>
-          <span class="img-badge badge-original">Original</span>
-          <span class="img-badge badge-processed">CrispAI</span>
+          <span class="img-badge badge-left">CrispAI</span>
+          <span class="img-badge badge-right">Original</span>
         </div>
       </div>
     </div>
@@ -442,7 +443,7 @@
     const elWrap        = document.getElementById('compare-wrap');
     const elOriginal    = document.getElementById('img-original');
     const elProcessed   = document.getElementById('img-processed');
-    const elClip        = document.getElementById('original-clip');   // now wraps the ORIGINAL
+    const elClip        = document.getElementById('left-clip');       // wraps the PROCESSED (left side)
     const elDivider     = document.getElementById('divider-line');
     const elLoading     = document.getElementById('loading-overlay');
     const elLoadingText = document.getElementById('loading-text');
