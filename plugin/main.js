@@ -385,7 +385,9 @@ async function getLayerPixels(doc, maxSize = null) {
   canvas.width = pw;
   canvas.height = ph;
   const ctx = canvas.getContext("2d");
-  ctx.putImageData(new ImageData(new Uint8ClampedArray(buffer), pw, ph), 0, 0);
+  const imageData = ctx.createImageData(pw, ph);
+  imageData.data.set(new Uint8ClampedArray(buffer));
+  ctx.putImageData(imageData, 0, 0);
   const dataUrl = canvas.toDataURL("image/png");
   const b64 = dataUrl.split(",")[1];
   return { b64, width: pw, height: ph };
