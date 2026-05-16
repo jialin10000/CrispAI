@@ -9,3 +9,5 @@ backend/weights/
 *.safetensors
 .DS_Store
 node_modules/
+backend/crispai.log
+*.log
