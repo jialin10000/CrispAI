@@ -8,11 +8,46 @@ import os
 import uuid
 import base64
 import logging
+import subprocess
+import webbrowser
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from PIL import Image
 
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
+
+
+def find_chromium_browser():
+    """Find Chrome or Edge for --app launch (no URL bar, no tabs)."""
+    candidates = [
+        os.path.expandvars(r"%ProgramFiles%\Google\Chrome\Application\chrome.exe"),
+        os.path.expandvars(r"%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe"),
+        os.path.expandvars(r"%LocalAppData%\Google\Chrome\Application\chrome.exe"),
+        os.path.expandvars(r"%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe"),
+        os.path.expandvars(r"%ProgramFiles%\Microsoft\Edge\Application\msedge.exe"),
+    ]
+    for path in candidates:
+        if os.path.exists(path):
+            return path
+    return None
+
+
+def launch_app_window(url: str):
+    """Open URL as a borderless app window (Chrome/Edge --app mode)."""
+    browser = find_chromium_browser()
+    if browser:
+        user_data = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "CrispAI", "browser")
+        os.makedirs(user_data, exist_ok=True)
+        subprocess.Popen([
+            browser,
+            f"--app={url}",
+            f"--user-data-dir={user_data}",
+            "--window-size=1280,820",
+        ])
+        logger.info(f"Launched app window via: {browser}")
+    else:
+        logger.warning("Chrome/Edge not found, falling back to default browser")
+        webbrowser.open(url)
 
 from models.denoise import DenoiseModel
 from models.sharpen import SharpenModel
@@ -108,6 +143,7 @@ def session_create():
         }
         url = f"http://localhost:7788/ui?session={sid}"
         logger.info(f"Session created: {sid}  {width}x{height}")
+        launch_app_window(url)   # opens borderless Chrome/Edge window
         return jsonify({"session_id": sid, "url": url})
     except Exception as e:
         logger.error(f"session_create error: {e}")

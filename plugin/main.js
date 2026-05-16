@@ -115,10 +115,8 @@ async function openCrispAI(btn, status) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ image: b64, format: "rgba8", width, height }),
     });
-    const { session_id, url } = await createResp.json();
-
-    // 5. Open CrispAI in browser
-    await shell.openExternal(url);
+    const { session_id } = await createResp.json();
+    // Backend automatically launches the CrispAI app window (Chrome --app mode)
     setStatus("Waiting for you to apply in CrispAI…");
 
     // 6. Poll until user clicks Apply or Cancel
