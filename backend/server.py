@@ -56,11 +56,12 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__, static_folder="static")
+app.config["MAX_CONTENT_LENGTH"] = 256 * 1024 * 1024   # 256 MB upload limit
 CORS(app)
 
 denoise_model = None
 sharpen_model = None
-sessions = {}   # sid -> { original_rgb, width, height, result_rgba, status }
+sessions = {}   # sid -> { pil, width, height, filename, result_pil, status }
 
 PREVIEW_MAX = 1200   # px — preview is scaled to this, full-res apply is not
 
@@ -108,6 +109,7 @@ def process_image(image: Image.Image, denoise_strength: float,
 
 # ── Static / UI ────────────────────────────────────────────────────────────────
 
+@app.route("/")
 @app.route("/ui")
 def ui():
     return send_from_directory(STATIC_DIR, "ui.html")
@@ -122,31 +124,54 @@ def health():
 
 # ── Session API ────────────────────────────────────────────────────────────────
 
+def _new_session(pil: Image.Image, filename: str = "untitled.png") -> str:
+    sid = str(uuid.uuid4())
+    sessions[sid] = {
+        "pil":         pil,
+        "width":       pil.size[0],
+        "height":      pil.size[1],
+        "filename":    filename,
+        "result_pil":  None,
+        "result_rgba": None,
+        "status":      "pending",
+    }
+    logger.info(f"Session {sid[:8]}…  {pil.size[0]}x{pil.size[1]}  ({filename})")
+    return sid
+
+
 @app.route("/session/create", methods=["POST"])
 def session_create():
-    """Plugin calls this to upload pixels and get a session URL."""
+    """PS plugin: upload raw RGBA pixels, get session URL."""
     data = request.json
     if not data or "image" not in data:
         return jsonify({"error": "missing image"}), 400
     try:
-        sid = str(uuid.uuid4())
         width  = int(data["width"])
         height = int(data["height"])
-        # Store as PIL RGB to avoid repeated decode
         pil = rgba8_to_pil(data["image"], width, height)
-        sessions[sid] = {
-            "pil":        pil,
-            "width":      width,
-            "height":     height,
-            "result_rgba": None,
-            "status":     "pending",
-        }
+        sid = _new_session(pil, "photoshop_layer.png")
         url = f"http://localhost:7788/ui?session={sid}"
-        logger.info(f"Session created: {sid}  {width}x{height}")
-        launch_app_window(url)   # opens borderless Chrome/Edge window
+        launch_app_window(url)
         return jsonify({"session_id": sid, "url": url})
     except Exception as e:
         logger.error(f"session_create error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/session/upload", methods=["POST"])
+def session_upload():
+    """Standalone web UI: upload an image file directly."""
+    if "file" not in request.files:
+        return jsonify({"error": "no file"}), 400
+    f = request.files["file"]
+    if not f.filename:
+        return jsonify({"error": "empty filename"}), 400
+    try:
+        pil = Image.open(f.stream).convert("RGB")
+        sid = _new_session(pil, f.filename)
+        return jsonify({"session_id": sid, "width": pil.size[0], "height": pil.size[1]})
+    except Exception as e:
+        logger.error(f"upload error: {e}")
         return jsonify({"error": str(e)}), 500
 
 
@@ -192,7 +217,7 @@ def session_preview(sid):
 
 @app.route("/session/<sid>/apply", methods=["POST"])
 def session_apply(sid):
-    """Web UI calls Apply — processes at full resolution, stores result."""
+    """Process at full resolution, store result. Web UI follows up with download."""
     s = sessions.get(sid)
     if not s:
         return jsonify({"error": "session not found"}), 404
@@ -204,13 +229,43 @@ def session_apply(sid):
             float(data.get("sharpen_strength", 0.5)),
             data.get("sharpen_mode", "auto"),
         )
-        s["result_rgba"] = pil_to_rgba_b64(result)
-        s["status"] = "ready"
-        logger.info(f"Session {sid} ready")
+        s["result_pil"]  = result
+        s["result_rgba"] = pil_to_rgba_b64(result)   # for PS plugin
+        s["status"]      = "ready"
+        logger.info(f"Session {sid[:8]}… ready")
         return jsonify({"status": "ready"})
     except Exception as e:
         logger.error(f"apply error: {e}")
         return jsonify({"error": str(e)}), 500
+
+
+@app.route("/session/<sid>/download", methods=["GET"])
+def session_download(sid):
+    """Stream the processed result as a downloadable file."""
+    s = sessions.get(sid)
+    if not s or s["result_pil"] is None:
+        return jsonify({"error": "result not ready"}), 404
+    fmt = (request.args.get("format") or "png").lower()
+    if fmt not in ("png", "jpg", "jpeg", "tiff", "tif"):
+        return jsonify({"error": f"unsupported format: {fmt}"}), 400
+    if fmt == "jpg": fmt = "jpeg"
+    if fmt == "tif": fmt = "tiff"
+
+    buf = io.BytesIO()
+    save_kwargs = {"format": fmt.upper()}
+    if fmt == "jpeg":
+        save_kwargs["quality"] = 95
+        save_kwargs["subsampling"] = 0
+    s["result_pil"].save(buf, **save_kwargs)
+    buf.seek(0)
+
+    base = os.path.splitext(os.path.basename(s["filename"]))[0] or "image"
+    ext  = {"jpeg": "jpg", "tiff": "tif"}.get(fmt, fmt)
+    download_name = f"{base}_crispai.{ext}"
+
+    mime = {"png": "image/png", "jpeg": "image/jpeg", "tiff": "image/tiff"}[fmt]
+    from flask import send_file
+    return send_file(buf, mimetype=mime, as_attachment=True, download_name=download_name)
 
 
 @app.route("/session/<sid>/result", methods=["GET"])
