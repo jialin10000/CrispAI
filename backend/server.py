@@ -77,7 +77,10 @@ sharpen_model = None
 deblur_model  = None
 sessions = {}   # sid -> { pil, width, height, filename, result_pil, status }
 
-PREVIEW_MAX = 1200   # px — preview is scaled to this, full-res apply is not
+# Display + preview resolution. Sony A1 / R5 / Z9-class 50 MP photos are
+# 8000+ px wide; downscaling to 2400 keeps them visibly sharp while AI
+# inference stays sub-second on a midrange GPU. Save-As still uses full-res.
+PREVIEW_MAX = 2400
 
 
 def get_denoise_model():
@@ -114,6 +117,14 @@ def rgba8_to_pil(b64: str, width: int, height: int) -> Image.Image:
 def pil_to_png_b64(image: Image.Image) -> str:
     buf = io.BytesIO()
     image.save(buf, format="PNG")
+    return base64.b64encode(buf.getvalue()).decode("utf-8")
+
+
+def pil_to_jpg_b64(image: Image.Image, quality: int = 92) -> str:
+    """Display-only encoding. JPG at q=92 is visually lossless for photos
+    and ~5-10x smaller than PNG — far better for over-the-wire preview."""
+    buf = io.BytesIO()
+    image.convert("RGB").save(buf, format="JPEG", quality=quality, subsampling=0)
     return base64.b64encode(buf.getvalue()).decode("utf-8")
 
 
@@ -314,7 +325,7 @@ def session_original(sid):
         scale = PREVIEW_MAX / max(w, h)
         img = img.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
     return jsonify({
-        "image":  pil_to_png_b64(img),
+        "image":  pil_to_jpg_b64(img, quality=94),   # display-only, JPG q=94
         "width":  s["width"],    # original (true) dimensions, for UI layout
         "height": s["height"],
     })
@@ -335,7 +346,7 @@ def session_preview(sid):
             scale = PREVIEW_MAX / max(w, h)
             img = img.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
         result = process_image(img, _parse_params(data))
-        return jsonify({"image": pil_to_png_b64(result)})
+        return jsonify({"image": pil_to_jpg_b64(result, quality=92)})
     except Exception as e:
         logger.error(f"preview error: {e}")
         return jsonify({"error": str(e)}), 500

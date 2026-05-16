@@ -558,7 +558,7 @@
         setLoading(true, 'Decoding…');
         const orig = await fetch(`${API}/session/${sid}/original`).then(r => r.json());
 
-        elOriginal.src = `data:image/png;base64,${orig.image}`;
+        elOriginal.src = `data:image/jpeg;base64,${orig.image}`;
         elOriginal.onload = () => {
           // Use the displayed image's actual size for zoom math, not the
           // original full-res dimensions (preview is downscaled for speed).
@@ -648,7 +648,7 @@
         });
         if (!r.ok) { const e = await r.json(); throw new Error(e.error || r.status); }
         const data = await r.json();
-        elProcessed.src = `data:image/png;base64,${data.image}`;
+        elProcessed.src = `data:image/jpeg;base64,${data.image}`;
         elBtnSave.disabled = false;
         setStatus('Drag the divider to compare', 'done');
       } catch (e) {
@@ -812,7 +812,7 @@
       fetch(`${API}/session/${sid}/original`).then(r => r.json()).then(data => {
         imgW = data.width; imgH = data.height;
         elFilename.textContent = `${imgW} × ${imgH} px (from Photoshop)`;
-        elOriginal.src = `data:image/png;base64,${data.image}`;
+        elOriginal.src = `data:image/jpeg;base64,${data.image}`;
         elOriginal.onload = () => {
           setLoading(false);
           elWrap.classList.add('visible');
