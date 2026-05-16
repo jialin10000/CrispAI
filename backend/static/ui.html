@@ -396,6 +396,11 @@
       </div>
 
       <div class="sidebar-footer">
+        <button class="btn btn-secondary" id="btn-full-preview"
+                style="margin-bottom:8px;" disabled
+                title="Process the entire image at full resolution (slow, accurate)">
+          Full-Quality Preview
+        </button>
         <div class="format-row">
           <span>Save as</span>
           <select id="save-format">
@@ -408,7 +413,7 @@
           <button class="btn btn-secondary" id="btn-discard">Discard</button>
           <button class="btn btn-primary"   id="btn-save" disabled>Save As…</button>
         </div>
-        <div class="version-note">CrispAI v0.4</div>
+        <div class="version-note">CrispAI v0.5</div>
       </div>
     </div>
   </div>
@@ -470,6 +475,7 @@
     const elStatusText  = document.getElementById('status-text');
     const elBtnSave     = document.getElementById('btn-save');
     const elBtnDiscard  = document.getElementById('btn-discard');
+    const elBtnFullPreview = document.getElementById('btn-full-preview');
 
     // ── Helpers ─────────────────────────────────────────────────
     function setStatus(text, state = '') {
@@ -650,6 +656,7 @@
         const data = await r.json();
         elProcessed.src = `data:image/jpeg;base64,${data.image}`;
         elBtnSave.disabled = false;
+        elBtnFullPreview.disabled = false;
         setStatus('Drag the divider to compare', 'done');
       } catch (e) {
         setStatus('Preview error: ' + e.message, 'error');
@@ -766,6 +773,34 @@
     }, { passive: false });
 
     // ── Save As ─────────────────────────────────────────────────
+    // ── Full-Quality Preview ───────────────────────────────────
+    // Re-runs the pipeline at the original full resolution and replaces
+    // the processed-image src with the result. Slow on 50 MP photos
+    // (3-15 s depending on enabled stages) but lets the user see exactly
+    // what Save As will produce.
+    elBtnFullPreview.addEventListener('click', async () => {
+      if (!sid) return;
+      elBtnFullPreview.disabled = true;
+      elBtnSave.disabled = true;
+      setStatus('Processing at full resolution…', 'working');
+      try {
+        const r = await fetch(`${API}/session/${sid}/preview_full`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(getParams()),
+        });
+        if (!r.ok) { const e = await r.json(); throw new Error(e.error || r.status); }
+        const data = await r.json();
+        elProcessed.src = `data:image/jpeg;base64,${data.image}`;
+        setStatus('Full-quality preview ready  ✓', 'done');
+      } catch (e) {
+        setStatus('Full preview error: ' + e.message, 'error');
+      } finally {
+        elBtnFullPreview.disabled = false;
+        elBtnSave.disabled = false;
+      }
+    });
+
     elBtnSave.addEventListener('click', async () => {
       if (!sid) return;
       elBtnSave.disabled = true;

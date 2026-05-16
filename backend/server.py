@@ -312,21 +312,18 @@ def session_upload():
 
 @app.route("/session/<sid>/original", methods=["GET"])
 def session_original(sid):
-    """Original image for display. Downscaled to PREVIEW_MAX so it matches
-    the preview pipeline's resolution — otherwise the two compare panels
-    would go through different resampling (browser-scale vs LANCZOS) and
-    look subtly different even when strength is 0."""
+    """Original image at FULL resolution. No downscaling — pro users zoom
+    to 100% to evaluate detail. A 50 MP Sony A1 JPG @ q=94 transfers in
+    about 1 s on localhost; browser decode another ~500 ms; one-time cost.
+    The processed preview is still computed at PREVIEW_MAX for slider
+    responsiveness, so when zoomed past PREVIEW_MAX it will look softer
+    than the original until 'Generate Full-Quality Preview' is run."""
     s = sessions.get(sid)
     if not s:
         return jsonify({"error": "session not found"}), 404
-    img = s["pil"]
-    w, h = img.size
-    if max(w, h) > PREVIEW_MAX:
-        scale = PREVIEW_MAX / max(w, h)
-        img = img.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
     return jsonify({
-        "image":  pil_to_jpg_b64(img, quality=94),   # display-only, JPG q=94
-        "width":  s["width"],    # original (true) dimensions, for UI layout
+        "image":  pil_to_jpg_b64(s["pil"], quality=94),
+        "width":  s["width"],
         "height": s["height"],
     })
 
@@ -349,6 +346,26 @@ def session_preview(sid):
         return jsonify({"image": pil_to_jpg_b64(result, quality=92)})
     except Exception as e:
         logger.error(f"preview error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/session/<sid>/preview_full", methods=["POST"])
+def session_preview_full(sid):
+    """Process at the original full resolution and return a JPG preview.
+    Slow (5-15 s for 50 MP) but lets the user see true output quality
+    before committing to Save As."""
+    s = sessions.get(sid)
+    if not s:
+        return jsonify({"error": "session not found"}), 404
+    data = request.json or {}
+    try:
+        result = process_image(s["pil"].copy(), _parse_params(data))
+        # Cache the result so Save As doesn't have to redo it
+        s["result_pil"]  = result
+        s["result_rgba"] = pil_to_rgba_b64(result)
+        return jsonify({"image": pil_to_jpg_b64(result, quality=94)})
+    except Exception as e:
+        logger.error(f"preview_full error: {e}")
         return jsonify({"error": str(e)}), 500
 
 
