@@ -108,7 +108,7 @@ function attachStyles(node) {
       border-radius: 4px; color: #fff; font-size: 12px; font-weight: 600; cursor: pointer; }
     .btn-launch:hover { background: #3468a3; }
 
-    .modal { position: absolute; inset: 0; z-index: 999; }
+    .modal { width: 100%; height: 100%; }
     .dialog-layout { display: flex; width: 100%; height: 100%; background: #1a1a1a; }
 
     .nodoc-msg { font-size: 11px; color: #999; line-height: 1.5; }
@@ -177,6 +177,7 @@ function setupUI(node) {
   function showView(name) {
     viewMain.style.display     = name === "main"     ? "flex" : "none";
     viewNoserver.style.display = name === "noserver" ? "flex" : "none";
+    modal.style.display        = name === "modal"    ? "flex" : "none";
   }
   const btnPreview    = node.querySelector("#btn-preview");
   const btnApply      = node.querySelector("#btn-apply");
@@ -227,7 +228,7 @@ function setupUI(node) {
   btnNoserverCancel.addEventListener("click", () => showView("main"));
 
   // ── Main modal ──
-  btnCancel.addEventListener("click", () => { modal.style.display = "none"; });
+  btnCancel.addEventListener("click", () => { showView("main"); });
 
   btnPreview.addEventListener("click", async () => {
     const doc = app.activeDocument;
@@ -247,7 +248,7 @@ function setupUI(node) {
       setCtrlStatus("Placing result in Photoshop...", "working");
       await placeResultAsLayer(doc, result.image, width, height, "CrispAI");
       setCtrlStatus("Done!", "done");
-      setTimeout(() => { modal.style.display = "none"; }, 800);
+      setTimeout(() => { showView("main"); }, 800);
     } catch (e) {
       setCtrlStatus("Error: " + e.message, "error");
       setButtonsDisabled(false);
@@ -308,7 +309,7 @@ function setupUI(node) {
         showView("noserver"); panelStatus.textContent = "Ready"; return;
       }
     }
-    modal.style.display = "flex";
+    showView("modal");
     await loadPreview(app.activeDocument);
     panelStatus.textContent = "Ready";
   }
