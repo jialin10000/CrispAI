@@ -96,7 +96,7 @@ const PANEL_HTML = `
 // ── CSS ────────────────────────────────────────────────────────
 function attachStyles(node) {
   // Make the node fill the panel and allow absolute children
-  node.style.cssText = "width:100%; height:100%; position:relative; overflow:hidden; display:block;";
+  node.style.cssText = "width:100%; height:100%; position:relative; display:block;";
 
   const style = document.createElement("style");
   style.textContent = `
@@ -333,7 +333,9 @@ function setupUI(node) {
       resetDivider();
       setCtrlStatus("Preview ready — drag divider to compare", "done");
     } catch (e) {
-      setCtrlStatus("Preview failed: " + e.message, "error");
+      placeholder.textContent = "Error: " + (e.message || String(e));
+      placeholder.style.display = "block";
+      setCtrlStatus("Preview failed", "error");
     }
   }
 }
