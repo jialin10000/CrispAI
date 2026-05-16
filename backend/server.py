@@ -53,7 +53,17 @@ from models.denoise import DenoiseModel
 from models.sharpen import SharpenModel
 from models.deblur  import DeblurModel
 
-logging.basicConfig(level=logging.INFO)
+# Log to both console (visible when run via py.exe) and a file (so pyw.exe
+# silent launches still leave a trail when something goes wrong).
+LOG_FILE = os.path.join(os.path.dirname(__file__), "crispai.log")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    handlers=[
+        logging.FileHandler(LOG_FILE, mode="w", encoding="utf-8"),
+        logging.StreamHandler(),
+    ],
+)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__, static_folder="static")

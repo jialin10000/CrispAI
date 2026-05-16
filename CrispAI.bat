@@ -18,9 +18,9 @@ if %ERRORLEVEL%==0 (
     goto :open_window
 )
 
-rem ── Step 2: start backend in detached minimized window ────────
+rem ── Step 2: start backend silently (pyw = no console window) ──
 echo Starting CrispAI backend...
-start "CrispAI Server" /MIN cmd /c "cd /d "%BACKEND%" && py -3.11 server.py"
+start "" /D "%BACKEND%" pyw -3.11 server.py
 
 rem ── Step 3: poll /health until up (max 30s) ───────────────────
 echo Waiting for server to come up...
@@ -31,7 +31,12 @@ for /L %%i in (1,1,30) do (
 )
 echo.
 echo ERROR: Server did not come up in 30 seconds.
-echo Check the "CrispAI Server" window for the actual error.
+echo See log:  %BACKEND%\crispai.log
+echo.
+if exist "%BACKEND%\crispai.log" (
+    echo -- last 20 lines --
+    powershell -NoProfile -Command "Get-Content '%BACKEND%\crispai.log' -Tail 20"
+)
 echo.
 pause
 exit /b 1
