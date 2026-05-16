@@ -2,49 +2,59 @@
 setlocal
 
 rem ── CrispAI one-click launcher ───────────────────────────────────────────
-rem  Starts the backend if it's not already running, then opens the CrispAI
-rem  app window. Safe to double-click multiple times — won't spawn duplicates.
+rem  Starts the backend if not already running, then opens the CrispAI app
+rem  window. Uses curl (Windows 10+) for health checks — much faster than
+rem  PowerShell. Safe to double-click multiple times.
 
 set "ROOT=%~dp0"
 set "BACKEND=%ROOT%backend"
 set "PORT=7788"
+set "URL=http://localhost:%PORT%"
 
-rem Quick check: is server already up?
-powershell -NoProfile -Command "try { $r = Invoke-WebRequest -UseBasicParsing -TimeoutSec 1 http://localhost:%PORT%/health; exit 0 } catch { exit 1 }"
-if %ERRORLEVEL%==0 goto :open_window
+rem ── Step 1: is server already up? ─────────────────────────────
+curl -sf --max-time 1 "%URL%/health" >nul 2>&1
+if %ERRORLEVEL%==0 (
+    echo Server already running.
+    goto :open_window
+)
 
-rem Start backend in a new window (so closing this .bat doesn't kill it)
+rem ── Step 2: start backend in detached minimized window ────────
 echo Starting CrispAI backend...
 start "CrispAI Server" /MIN cmd /c "cd /d "%BACKEND%" && py -3.11 server.py"
 
-rem Wait up to 20s for /health to come up
-echo Waiting for server...
-for /L %%i in (1,1,40) do (
-  powershell -NoProfile -Command "try { Invoke-WebRequest -UseBasicParsing -TimeoutSec 1 http://localhost:%PORT%/health | Out-Null; exit 0 } catch { exit 1 }"
-  if not errorlevel 1 goto :open_window
-  timeout /t 1 /nobreak >nul
+rem ── Step 3: poll /health until up (max 30s) ───────────────────
+echo Waiting for server to come up...
+for /L %%i in (1,1,30) do (
+    curl -sf --max-time 1 "%URL%/health" >nul 2>&1
+    if not errorlevel 1 goto :open_window
+    timeout /t 1 /nobreak >nul
 )
-echo Server did not start in time. Check the "CrispAI Server" window for errors.
+echo.
+echo ERROR: Server did not come up in 30 seconds.
+echo Check the "CrispAI Server" window for the actual error.
+echo.
 pause
 exit /b 1
 
 :open_window
-rem Open as app window via Chrome/Edge --app (no URL bar, no tabs)
-set "URL=http://localhost:%PORT%/ui"
+echo Opening CrispAI window...
 
+rem ── Step 4: launch as borderless app window (Chrome/Edge --app) ──
 for %%P in (
-  "%ProgramFiles%\Google\Chrome\Application\chrome.exe"
-  "%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe"
-  "%LocalAppData%\Google\Chrome\Application\chrome.exe"
-  "%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe"
-  "%ProgramFiles%\Microsoft\Edge\Application\msedge.exe"
+    "%ProgramFiles%\Google\Chrome\Application\chrome.exe"
+    "%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe"
+    "%LocalAppData%\Google\Chrome\Application\chrome.exe"
+    "%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe"
+    "%ProgramFiles%\Microsoft\Edge\Application\msedge.exe"
 ) do (
-  if exist %%P (
-    start "" %%P --app="%URL%" --window-size=1280,820 --user-data-dir="%LocalAppData%\CrispAI\browser"
-    exit /b 0
-  )
+    if exist %%P (
+        start "" %%P --app="%URL%/ui" --window-size=1280,820 ^
+            --user-data-dir="%LocalAppData%\CrispAI\browser"
+        exit /b 0
+    )
 )
 
-rem Fallback: default browser
-start "" "%URL%"
+rem ── Fallback: default browser ─────────────────────────────────
+echo No Chrome/Edge found, opening in default browser.
+start "" "%URL%/ui"
 exit /b 0
