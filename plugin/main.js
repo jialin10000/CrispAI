@@ -62,12 +62,14 @@ async function openCrispAI(btn, status) {
     status.className = "status" + (cls ? " " + cls : "");
   };
 
+  let step = "init";
   try {
     // 1. Check server
+    step = "checkServer";
     setStatus("Connecting to server…", "working");
     const health = await fetch(`${SERVER}/health`).catch(() => null);
     if (!health || !health.ok) {
-      // Try to auto-start server
+      step = "startServer";
       setStatus("Starting server…", "working");
       try {
         const pluginFolder = await fs.getPluginFolder();
@@ -86,14 +88,17 @@ async function openCrispAI(btn, status) {
     }
 
     // 2. Check / open document
+    step = "checkDoc";
     let doc = app.activeDocument;
     if (!doc) {
+      step = "pickFile";
       setStatus("Choose a photo…");
       const file = await fs.getFileForOpening({
         allowMultiple: false,
         types: ["jpg","jpeg","png","tif","tiff","psd","psb"],
       });
       if (!file) { setStatus("Ready"); btn.disabled = false; return; }
+      step = "openFile";
       setStatus("Opening…", "working");
       await core.executeAsModal(async () => { await app.open(file); },
         { commandName: "CrispAI: open file" });
@@ -101,6 +106,7 @@ async function openCrispAI(btn, status) {
     }
 
     // 3. Read pixels (requires modal scope)
+    step = "readPixels";
     setStatus("Reading pixels…", "working");
     let b64, width, height;
     await core.executeAsModal(async () => {
@@ -109,28 +115,31 @@ async function openCrispAI(btn, status) {
     }, { commandName: "CrispAI: read pixels" });
 
     // 4. Upload to server → get session URL
-    setStatus("Uploading…", "working");
+    step = "upload";
+    setStatus(`Uploading ${width}×${height}…`, "working");
     const createResp = await fetch(`${SERVER}/session/create`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ image: b64, format: "rgba8", width, height }),
     });
+    if (!createResp.ok) throw new Error(`Upload failed: HTTP ${createResp.status}`);
     const { session_id } = await createResp.json();
-    // Backend automatically launches the CrispAI app window (Chrome --app mode)
     setStatus("Waiting for you to apply in CrispAI…");
 
-    // 6. Poll until user clicks Apply or Cancel
+    // 5. Poll until user clicks Apply or Cancel
+    step = "poll";
     const result = await pollResult(session_id, setStatus);
     if (!result) { setStatus("Cancelled"); btn.disabled = false; return; }
 
-    // 7. Place result as new PS layer
+    // 6. Place result as new PS layer
+    step = "placeResult";
     setStatus("Placing result…", "working");
     await placeResult(doc, result);
     setStatus("Done!", "done");
     setTimeout(() => setStatus("Ready"), 3000);
 
   } catch (e) {
-    setStatus("Error: " + (e.message || String(e)), "error");
+    setStatus(`[${step}] ${e.message || String(e)}`, "error");
   }
 
   btn.disabled = false;
@@ -200,11 +209,18 @@ async function getLayerPixels(doc) {
 
 // ── Encode / decode helpers ────────────────────────────────────
 function uint8ToBase64(bytes) {
-  let binary = "";
-  const chunk = 8192;
-  for (let i = 0; i < bytes.length; i += chunk)
-    binary += String.fromCharCode.apply(null, bytes.subarray(i, Math.min(i + chunk, bytes.length)));
-  return btoa(binary);
+  // Avoid String.fromCharCode.apply(...typedArray) — fails with RangeError
+  // on some UXP builds even for small chunks. Plain loop is reliable.
+  const CHUNK = 16384;
+  const parts = [];
+  const len = bytes.length;
+  for (let i = 0; i < len; i += CHUNK) {
+    const end = Math.min(i + CHUNK, len);
+    const chars = new Array(end - i);
+    for (let j = 0; j < end - i; j++) chars[j] = String.fromCharCode(bytes[i + j]);
+    parts.push(chars.join(""));
+  }
+  return btoa(parts.join(""));
 }
 
 function base64ToUint8(b64) {
