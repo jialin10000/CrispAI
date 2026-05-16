@@ -345,7 +345,10 @@ def session_preview(sid):
             scale = PREVIEW_MAX / max(w, h)
             img = img.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
         result = process_image(img, _parse_params(data))
-        return jsonify({"image": pil_to_jpg_b64(result, quality=92)})
+        # PNG (lossless) for the processed preview: when the user zooms
+        # past PREVIEW_MAX and the browser stretches it, JPEG 8×8 DCT
+        # blocks would become big visible coloured squares. PNG avoids that.
+        return jsonify({"image": pil_to_png_b64(result)})
     except Exception as e:
         logger.error(f"preview error: {e}")
         return jsonify({"error": str(e)}), 500

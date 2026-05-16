@@ -599,8 +599,31 @@
       const scale = Math.min(1, aw / imgW, ah / imgH);
       applyScale(scale);
     }
-    document.getElementById('btn-zoom-in') .addEventListener('click', () => applyScale(Math.min(currentScale * 1.25, 4)));
-    document.getElementById('btn-zoom-out').addEventListener('click', () => applyScale(Math.max(currentScale / 1.25, 0.05)));
+    // Zoom that anchors a screen-point so the same image pixel stays under
+    // that point. anchorClientX/Y default to the centre of the viewport.
+    function zoomTo(newScale, anchorClientX, anchorClientY) {
+      if (!imgW) return;
+      newScale = Math.max(0.05, Math.min(newScale, 4));
+      if (Math.abs(newScale - currentScale) < 0.001) return;
+
+      const areaRect = elArea.getBoundingClientRect();
+      if (anchorClientX == null) anchorClientX = areaRect.left + areaRect.width / 2;
+      if (anchorClientY == null) anchorClientY = areaRect.top  + areaRect.height / 2;
+
+      const r = elWrap.getBoundingClientRect();
+      const ax = anchorClientX - r.left;   // anchor position inside the wrap, pre-zoom
+      const ay = anchorClientY - r.top;
+      const ratio = newScale / currentScale;
+
+      applyScale(newScale);
+      requestAnimationFrame(() => {
+        elArea.scrollLeft += ax * (ratio - 1);
+        elArea.scrollTop  += ay * (ratio - 1);
+      });
+    }
+
+    document.getElementById('btn-zoom-in') .addEventListener('click', () => zoomTo(currentScale * 1.25));
+    document.getElementById('btn-zoom-out').addEventListener('click', () => zoomTo(currentScale / 1.25));
     document.getElementById('btn-zoom-fit').addEventListener('click', fitToWindow);
     window.addEventListener('resize', () => { if (imgW) fitToWindow(); });
 
@@ -709,13 +732,7 @@
       if (Math.abs(currentScale - 1.0) < 0.005) {
         fitToWindow();
       } else {
-        applyScale(1.0);
-        // Re-center scroll so the clicked point ends up near viewport center
-        requestAnimationFrame(() => {
-          const r = elWrap.getBoundingClientRect();
-          elArea.scrollLeft += (clientX - r.left) - elArea.clientWidth / 2;
-          elArea.scrollTop  += (clientY - r.top)  - elArea.clientHeight / 2;
-        });
+        zoomTo(1.0, clientX, clientY);   // double-click point stays under cursor
       }
     }
 
@@ -752,24 +769,12 @@
 
     elWrap.addEventListener('pointercancel', () => { dragging = false; });
 
-    // Mouse-wheel zoom (Topaz convention: Ctrl+wheel, or plain wheel inside area)
+    // Mouse-wheel zoom — anchors the pixel under the cursor (Photoshop convention)
     elArea.addEventListener('wheel', e => {
       if (!imgW) return;
       e.preventDefault();
       const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
-      const newScale = Math.max(0.05, Math.min(currentScale * factor, 4));
-      const r = elWrap.getBoundingClientRect();
-      const px = e.clientX - r.left;
-      const py = e.clientY - r.top;
-      applyScale(newScale);
-      // Keep the cursor point stable
-      requestAnimationFrame(() => {
-        const r2 = elWrap.getBoundingClientRect();
-        const dx = (px * newScale / currentScale) - (e.clientX - r2.left);
-        const dy = (py * newScale / currentScale) - (e.clientY - r2.top);
-        elArea.scrollLeft += dx;
-        elArea.scrollTop  += dy;
-      });
+      zoomTo(currentScale * factor, e.clientX, e.clientY);
     }, { passive: false });
 
     // ── Save As ─────────────────────────────────────────────────
